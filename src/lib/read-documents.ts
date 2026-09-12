@@ -27,12 +27,13 @@ async function readPdf(file: File): Promise<string> {
       .trim();
     if (text) pages.push(text);
   }
-  await pdf.destroy();
   return pages.join("\n\n");
 }
 
 async function readDocx(file: File): Promise<string> {
-  const mammoth = await import("mammoth/mammoth.browser.js");
+  const mammoth = (await import("mammoth/mammoth.browser.js")) as {
+    extractRawText: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }>;
+  };
   const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
   return result.value.trim();
 }
