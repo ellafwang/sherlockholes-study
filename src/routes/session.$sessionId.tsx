@@ -149,7 +149,17 @@ function SessionPage() {
     return { covered, percent: Math.round((covered.length / concepts.length) * 100) };
   }, [concepts, transcriptSoFar, speech.finalText, speech.interimText, segments.data]);
 
+  /* ---------- live trail of Sherlock's judgements ---------- */
+  const recentVerdicts = useMemo<Verdict[]>(
+    () =>
+      (segments.data ?? [])
+        .slice(-10)
+        .map((segment) => (segment.verdict ?? "neutral") as Verdict),
+    [segments.data],
+  );
+
   /* ---------- countdown ---------- */
+
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => setElapsed((value) => value + 1), 1000);
@@ -750,12 +760,57 @@ function SessionPage() {
             )}
           </div>
 
-          <SherlockFace verdict={verdict} className="mt-4" />
+          <div className={cn("mt-4 transition-transform", grading && "animate-pulse")}>
+            <SherlockFace verdict={verdict} />
+          </div>
+
+          {stage === "teach" && panel === "none" && (
+            <div className="mt-2 flex flex-col items-center gap-1.5">
+              <p aria-live="polite" className="label-caps text-muted-foreground">
+                {grading
+                  ? "Sherlock is judging that…"
+                  : speech.transcribing
+                    ? "Catching your words…"
+                    : speech.listening
+                      ? verdict === "green"
+                        ? "He's following you"
+                        : verdict === "yellow"
+                          ? "He's getting confused"
+                          : verdict === "red"
+                            ? "He thinks that's wrong"
+                            : "He's listening"
+                      : "Paused"}
+              </p>
+              {recentVerdicts.length > 0 && (
+                <div
+                  className="flex items-center gap-1"
+                  aria-label="Sherlock's reactions so far"
+                >
+                  {recentVerdicts.map((item, index) => (
+                    <span
+                      key={`${item}-${index}`}
+                      className="h-2 w-5 rounded-full transition-colors"
+                      style={{
+                        background:
+                          item === "green"
+                            ? "var(--verdict-green)"
+                            : item === "yellow"
+                              ? "var(--brass)"
+                              : item === "red"
+                                ? "var(--verdict-red)"
+                                : "var(--muted)",
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {reaction && (
             <p
               aria-live="polite"
-              className="mt-2 max-w-md text-center text-base italic"
+              className="mt-2 max-w-md animate-fade-in text-center text-base italic"
               style={{
                 color:
                   verdict === "green"
@@ -770,6 +825,7 @@ function SessionPage() {
               “{reaction}”
             </p>
           )}
+
 
           <div className="mt-4">
             <RecorderOrb
