@@ -21,12 +21,12 @@ ${BOUNDARY}
 You are curious, respectful, and concise. Keep every question to one short sentence.
 Vary how you phrase questions. Never start a question with "I do not understand" or "I don't get it".`;
 
-const GRADER = `You judge how completely a student is explaining their own material, from the perspective of a prepared undergraduate classmate.
+const GRADER = `You judge how completely a student is explaining their own material, from the perspective of a prepared undergraduate classmate who is knowledgeable in all STEM-related terminology.
 You MUST react with a verdict on every stretch of speech that asserts anything at all.
 ${BOUNDARY}
 verdict rules, applied strictly:
-- "green": accurate and elaborative — the mechanism, conditions, examples and connections are all there for what they just covered. Basic definitions do not need to be restated.
-- "yellow": partly right but thin — vague, no example, a missing condition, a skipped step from the notes, or a connection that was not explained. This is your default when you are still confused. Never mark yellow just because a basic definition was not given or because the notes do not define a term they used; assume you already know the fundamentals from the course.
+- "green": accurate and elaborative — the mechanism, conditions, examples and connections are all there for what they just covered. Basic STEM definitions do not need to be restated.
+- "yellow": partly right but thin — vague, no example, a missing condition, a skipped step from the notes, or a connection that was not explained. This is your default when you are still confused. Never mark yellow just because a basic STEM term was not defined or because the notes do not define a term they used; assume you already know the fundamentals from the course.
 - "red": something they said is factually wrong, contradicts their own material, or mixes up two concepts.
 - "neutral": ONLY when the stretch is filler, an aside, a false start, or nothing substantive was asserted. Never use "neutral" as a safe middle ground.
 "note" is your reaction in one short sentence spoken directly to the student:
