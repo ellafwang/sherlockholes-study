@@ -63,9 +63,11 @@ export type SpeechState = {
   interimText: string;
   /** True while the student's voice is actually coming through. */
   speaking: boolean;
+  transcribing: boolean;
   error: string | null;
   start: () => void;
-  stop: () => void;
+  /** Stops recording, waits for the final clip, and returns all unconsumed speech. */
+  stop: () => Promise<string>;
   reset: () => void;
   /** Returns everything captured since the last call, and marks it consumed. */
   drain: () => string;
@@ -85,6 +87,7 @@ export function useSpeechRecognition(): SpeechState {
   const [finalText, setFinalText] = useState("");
   const [interimText, setInterimText] = useState("");
   const [speaking, setSpeaking] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wantsListeningRef = useRef(false);
@@ -95,6 +98,7 @@ export function useSpeechRecognition(): SpeechState {
   const consumedRef = useRef(0);
   const finalRef = useRef("");
   const speakingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTranscriptionsRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     setSupported(
@@ -111,26 +115,32 @@ export function useSpeechRecognition(): SpeechState {
   }, []);
 
   const sendClip = useCallback(
-    async (blob: Blob, mimeType: string) => {
+    (blob: Blob, mimeType: string) => {
       if (blob.size < 4000) return; // near-silence or an empty container
-      try {
-        const audio = await toBase64(blob);
-        const result = await transcribe({ data: { audio, mimeType: mimeType || "audio/webm" } });
-        if (!result.ok) {
-          setError(result.message);
-          return;
-        }
-        const text = result.text.trim();
-        if (!text) return;
-        setError(null);
-        finalRef.current = `${finalRef.current}${text} `;
-        setFinalText(finalRef.current);
-        setInterimText("");
-        markSpeaking();
-      } catch (cause) {
-        console.error(cause);
-        setError("Transcription hiccuped. Keep talking, or type your explanation instead.");
-      }
+      setTranscribing(true);
+      pendingTranscriptionsRef.current = pendingTranscriptionsRef.current
+        .then(async () => {
+          const audio = await toBase64(blob);
+          const result = await transcribe({ data: { audio, mimeType: mimeType || "audio/webm" } });
+          if (!result.ok) {
+            setError(result.message);
+            return;
+          }
+          const text = result.text.trim();
+          if (!text) return;
+          setError(null);
+          finalRef.current = `${finalRef.current}${text} `;
+          setFinalText(finalRef.current);
+          setInterimText("");
+          markSpeaking();
+        })
+        .catch((cause) => {
+          console.error(cause);
+          setError("Transcription hiccuped. Please try speaking again, or type your explanation.");
+        })
+        .finally(() => {
+          setTranscribing(false);
+        });
     },
     [markSpeaking, transcribe],
   );
@@ -191,18 +201,26 @@ export function useSpeechRecognition(): SpeechState {
     }
   }, [markSpeaking]);
 
-  const teardown = useCallback(() => {
+  const teardown = useCallback((): Promise<void> => {
     wantsListeningRef.current = false;
     if (cycleTimer.current) clearTimeout(cycleTimer.current);
     cycleTimer.current = null;
     const recorder = recorderRef.current;
     recorderRef.current = null;
+    let recorderStopped = Promise.resolve();
     if (recorder && recorder.state !== "inactive") {
-      try {
-        recorder.stop();
-      } catch {
-        /* already stopped */
-      }
+      recorderStopped = new Promise<void>((resolve) => {
+        const originalOnStop = recorder.onstop;
+        recorder.onstop = (event) => {
+          originalOnStop?.call(recorder, event);
+          resolve();
+        };
+        try {
+          recorder.stop();
+        } catch {
+          resolve();
+        }
+      });
     }
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
@@ -219,6 +237,7 @@ export function useSpeechRecognition(): SpeechState {
     streamRef.current = null;
     setInterimText("");
     setSpeaking(false);
+    return recorderStopped.then(() => pendingTranscriptionsRef.current);
   }, []);
 
   const start = useCallback(() => {
@@ -247,9 +266,11 @@ export function useSpeechRecognition(): SpeechState {
     })();
   }, [runCycle, startCaptions]);
 
-  const stop = useCallback(() => {
-    teardown();
+  const stop = useCallback(async () => {
+    await teardown();
     setListening(false);
+    const fresh = finalRef.current.slice(consumedRef.current);
+    return fresh.trim();
   }, [teardown]);
 
   const reset = useCallback(() => {
@@ -267,7 +288,7 @@ export function useSpeechRecognition(): SpeechState {
 
   useEffect(
     () => () => {
-      teardown();
+      void teardown();
       if (speakingTimer.current) clearTimeout(speakingTimer.current);
     },
     [teardown],
@@ -279,6 +300,7 @@ export function useSpeechRecognition(): SpeechState {
     finalText,
     interimText,
     speaking,
+    transcribing,
     error,
     start,
     stop,
