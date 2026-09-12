@@ -102,7 +102,9 @@ Judge ONLY the newest stretch of speech, in the context of what came before.
 Also note which single concept from their material it belongs to (use their own wording, or "General" if none fits),
 count how many worked examples or concrete instances they gave in this stretch,
 and return an empty "questions" array. Do not generate follow-up questions during the blurt.
-"note" is one short sentence, addressed to the student, that you keep to yourself for now.`,
+"note" is one short sentence, addressed to the student, that you keep to yourself for now.
+${BOUNDARY}
+When judging, do not penalize the student for failing to define a term that the notes do not define; only penalize factual errors or contradictions with the supplied material.`,
       input: `Their notes:\n${data.notes || "(none)"}
 Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
 
