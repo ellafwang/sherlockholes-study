@@ -46,6 +46,12 @@
   --color-verdict-green: var(--verdict-green);
   --color-verdict-yellow: var(--verdict-yellow);
   --color-verdict-red: var(--verdict-red);
+  --color-notebook-gold: var(--notebook-gold);
+  --color-notebook-crimson: var(--notebook-crimson);
+  --color-notebook-forest: var(--notebook-forest);
+  --color-notebook-navy: var(--notebook-navy);
+  --color-notebook-plum: var(--notebook-plum);
+  --color-notebook-charcoal: var(--notebook-charcoal);
   --shadow-case: var(--shadow-case);
   --shadow-plate: var(--shadow-plate);
 }
@@ -57,6 +63,12 @@
   --ink: #030706;
   --gold: #f5b942;
   --brass: #964f03;
+  --notebook-gold: #d69a24;
+  --notebook-crimson: #9f2f35;
+  --notebook-forest: #38634a;
+  --notebook-navy: #344f72;
+  --notebook-plum: #704768;
+  --notebook-charcoal: #454b49;
 
   --background: #f0dcb9;
   --foreground: #030706;

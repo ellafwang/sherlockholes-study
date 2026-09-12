@@ -27,8 +27,8 @@ export const stringsOf = (value: unknown): string[] =>
 export const listNotebooks = async () =>
   unwrap(await supabase.from("notebooks").select("*").order("created_at", { ascending: false }));
 
-export const createNotebook = async (title: string, subject: string | null) =>
-  unwrap(await supabase.from("notebooks").insert({ title, subject }).select().single());
+export const createNotebook = async (title: string, subject: string | null, color: string) =>
+  unwrap(await supabase.from("notebooks").insert({ title, subject, color }).select().single());
 
 export const renameNotebook = async (id: string, title: string) =>
   unwrap(await supabase.from("notebooks").update({ title }).eq("id", id).select().single());
