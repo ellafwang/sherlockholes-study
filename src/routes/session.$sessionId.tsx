@@ -725,7 +725,7 @@ function SessionPage() {
         </div>
         <MaterialStage
           initialNotes={notes}
-          initialConcepts={concepts}
+          
           initialLimit={limit}
           busy={starting}
           onStart={startTeaching}
