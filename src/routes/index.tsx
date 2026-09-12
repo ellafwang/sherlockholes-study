@@ -96,7 +96,7 @@ function Dashboard() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:py-16">
-      <header className="animate-rise-in flex flex-wrap items-end justify-between gap-4">
+      <header className="animate-rise-in flex flex-wrap items-center justify-between gap-6">
         <div className="flex flex-col items-center text-center">
           <div className="flex items-center gap-2 rounded-sm border-2 border-dashed border-brass bg-card px-4 py-2 shadow-plate rotate-[-1deg]">
             <MagnifierIcon className="h-8 w-8 text-brass" />
@@ -108,8 +108,8 @@ function Dashboard() {
             a hole in what you know — and that's exactly where you'll study next.
           </p>
         </div>
-        <Button size="lg" onClick={() => setCreating(true)}>
-          <Plus className="mr-1 h-4 w-4" /> New notebook
+        <Button size="lg" className="h-auto gap-2 px-7 py-5 text-lg" onClick={() => setCreating(true)}>
+          <Plus className="h-5 w-5" /> New notebook
         </Button>
       </header>
 
