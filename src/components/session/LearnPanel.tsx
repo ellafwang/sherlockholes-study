@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MathText } from "@/components/MathText";
 import { LightbulbIcon } from "@/components/MysteryIcons";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MathTextarea } from "@/components/MathTextarea";
 
 export type LearnEntry = { id: string; role: string; content: string };
 
@@ -146,11 +146,11 @@ export function LearnPanel({
       )}
 
       <div className="mt-4 flex items-end gap-2 border-t border-border pt-4">
-        <Textarea
+        <MathTextarea
           value={draft}
           placeholder="Ask Sherlock to explain something…"
           className="min-h-20"
-          onChange={(event) => setDraft(event.target.value)}
+          onValueChange={setDraft}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();

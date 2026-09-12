@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { SherlockFace } from "@/components/SherlockFace";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MathTextarea } from "@/components/MathTextarea";
 import { readNotesFile } from "@/lib/read-documents";
 
 const DURATIONS = [60, 120, 180, 240, 300];
@@ -64,11 +64,12 @@ export function MaterialStage({
         </p>
 
         <div className="mt-6 space-y-3">
-          <Textarea
+          <MathTextarea
             value={notes}
-            onChange={(event) => setNotes(event.target.value)}
+            onValueChange={setNotes}
             placeholder="Paste your lecture notes, textbook section or summary here…"
             className="min-h-56"
+            keypadLabel="Math keypad"
           />
           <input
             ref={fileInput}

@@ -5,7 +5,7 @@ import { MathText } from "@/components/MathText";
 import { QuestionBubbleIcon } from "@/components/MysteryIcons";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MathTextarea } from "@/components/MathTextarea";
 import type { Verdict } from "@/components/SherlockFace";
 
 export type QaEntry = { id: string; role: string; content: string; verdict: string };
@@ -100,12 +100,12 @@ export function QaPanel({
           </p>
 
           <div className="mt-4 flex items-start gap-3">
-            <Textarea
+            <MathTextarea
               value={listening ? liveText : typed}
               readOnly={listening}
               placeholder={micSupported ? "Answer out loud, or type here…" : "Type your answer…"}
               className="min-h-24"
-              onChange={(event) => setTyped(event.target.value)}
+              onValueChange={setTyped}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) submit();
               }}
