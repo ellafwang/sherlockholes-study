@@ -112,6 +112,8 @@ function SessionPage() {
   const [voiceLoading, setVoiceLoading] = useState(false);
   const lastGradeAt = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const pendingPlayRef = useRef<(() => Promise<void>) | null>(null);
 
   const stage = session.data?.stage ?? "material";
   const limit = session.data?.blurt_limit_seconds ?? 180;
