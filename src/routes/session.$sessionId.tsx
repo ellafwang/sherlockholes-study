@@ -777,6 +777,7 @@ function SessionPage() {
     speech.reset();
     setVerdict("neutral");
     setReaction(null);
+    setRetake(true);
     setRunning(true);
     if (speech.supported) speech.start();
   };
@@ -924,12 +925,14 @@ function SessionPage() {
             <RecorderOrb
               listening={speech.listening}
               speaking={speech.speaking}
-              disabled={!speech.supported}
+              disabled={!speech.supported || speakingLocked}
               onToggle={toggleRecorder}
               levels={speech.levels}
               wordCount={spokenWords}
               label={
-                !speech.supported
+                speakingLocked
+                  ? "Case closed"
+                  : !speech.supported
                   ? "Mic unavailable"
                   : grading
                     ? "Sherlock is following"
