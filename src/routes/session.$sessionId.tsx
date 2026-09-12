@@ -1,0 +1,734 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowLeft, Pause, Play } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { QuestionBubbleIcon, TreasureChestIcon } from "@/components/MysteryIcons";
+import { SherlockFace, type Verdict } from "@/components/SherlockFace";
+import { FeedbackPanel, type Report } from "@/components/session/FeedbackPanel";
+import { LearnPanel } from "@/components/session/LearnPanel";
+import { MaterialStage } from "@/components/session/MaterialStage";
+import { QaPanel, verdictOf } from "@/components/session/QaPanel";
+import { RecorderOrb } from "@/components/session/RecorderOrb";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import {
+  addLearnMessage,
+  addLearnTopics,
+  addQaTurn,
+  addQuestions,
+  addSegment,
+  clearSegments,
+  getSession,
+  getSummary,
+  keyConceptsOf,
+  listLearnMessages,
+  listLearnTopics,
+  listQaTurns,
+  listQuestions,
+  listSegments,
+  saveSummary,
+  setQuestionStatus,
+  stringsOf,
+  updateSession,
+} from "@/lib/db";
+import { buildReport, gradeAnswer, gradeBlurt, learnReply, seedQuestions } from "@/lib/sherlock.functions";
+import { speakAsSherlock } from "@/lib/voice.functions";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/session/$sessionId")({
+  head: () => ({
+    meta: [
+      { title: "Teach Sherlock — Sherlock Holes" },
+      {
+        name: "description",
+        content:
+          "Explain your topic out loud to Sherlock, answer the questions he was left with, then learn what you missed.",
+      },
+      { property: "og:title", content: "Teach Sherlock — Sherlock Holes" },
+      {
+        property: "og:description",
+        content: "A live teaching session: blurt, mid-session Q&A, feedback report and tutoring.",
+      },
+    ],
+  }),
+  ssr: false,
+  component: SessionPage,
+});
+
+const GRADE_EVERY_MS = 15000;
+type Panel = "none" | "qa" | "feedback" | "learn";
+
+function mmss(total: number) {
+  const safe = Math.max(0, Math.round(total));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function SessionPage() {
+  const { sessionId } = Route.useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const speech = useSpeechRecognition();
+
+  const gradeBlurtFn = useServerFn(gradeBlurt);
+  const gradeAnswerFn = useServerFn(gradeAnswer);
+  const seedQuestionsFn = useServerFn(seedQuestions);
+  const buildReportFn = useServerFn(buildReport);
+  const learnReplyFn = useServerFn(learnReply);
+  const speakFn = useServerFn(speakAsSherlock);
+
+  const session = useQuery({ queryKey: ["session", sessionId], queryFn: () => getSession(sessionId) });
+  const questions = useQuery({ queryKey: ["questions", sessionId], queryFn: () => listQuestions(sessionId) });
+  const segments = useQuery({ queryKey: ["segments", sessionId], queryFn: () => listSegments(sessionId) });
+  const qaTurns = useQuery({ queryKey: ["qa", sessionId], queryFn: () => listQaTurns(sessionId) });
+  const summary = useQuery({ queryKey: ["summary", sessionId], queryFn: () => getSummary(sessionId) });
+  const learnTopics = useQuery({ queryKey: ["learn-topics", sessionId], queryFn: () => listLearnTopics(sessionId) });
+  const learnMessages = useQuery({
+    queryKey: ["learn-messages", sessionId],
+    queryFn: () => listLearnMessages(sessionId),
+  });
+
+  const [verdict, setVerdict] = useState<Verdict>("neutral");
+  const [panel, setPanel] = useState<Panel>("none");
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [grading, setGrading] = useState(false);
+  const [showTyping, setShowTyping] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [typedBlurt, setTypedBlurt] = useState("");
+  const [followUp, setFollowUp] = useState<{ question: string; questionId: string | null } | null>(null);
+  const [followUpDepth, setFollowUpDepth] = useState(0);
+  const [qaBusy, setQaBusy] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [learnBusy, setLearnBusy] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const lastGradeAt = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stage = session.data?.stage ?? "material";
+  const limit = session.data?.blurt_limit_seconds ?? 180;
+  const concepts = useMemo(() => (session.data ? keyConceptsOf(session.data) : []), [session.data]);
+  const notes = session.data?.notes_text ?? "";
+  const remaining = Math.max(0, limit - elapsed);
+
+  /* ---------- persisted transcript so far ---------- */
+  const transcriptSoFar = useMemo(
+    () => (segments.data ?? []).map((segment) => segment.transcript).join(" "),
+    [segments.data],
+  );
+
+  /* ---------- countdown ---------- */
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setElapsed((value) => value + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  const gradeChunk = useCallback(
+    async (chunk: string, at: number, duration: number) => {
+      if (!chunk || !session.data) return;
+      setGrading(true);
+      try {
+        const grade = await gradeBlurtFn({
+          data: {
+            sessionTitle: session.data.title,
+            notes,
+            concepts,
+            transcript: chunk,
+            earlier: transcriptSoFar,
+          },
+        });
+        setVerdict(grade.verdict);
+        await addSegment({
+          session_id: sessionId,
+          transcript: chunk,
+          verdict: grade.verdict,
+          concept: grade.concept || null,
+          at_seconds: Math.round(at),
+          duration_seconds: Math.max(1, Math.round(duration)),
+          example_count: Math.max(0, grade.examples),
+        });
+        if (grade.questions.length > 0) {
+          await addQuestions(
+            sessionId,
+            grade.questions.slice(0, 2).map((item) => ({
+              question: item.question,
+              concept: item.concept || null,
+              source: "blurt",
+            })),
+          );
+          queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+        }
+        queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
+      } catch (error) {
+        console.error(error);
+        toast.error((error as Error).message);
+      } finally {
+        setGrading(false);
+      }
+    },
+    [concepts, gradeBlurtFn, notes, queryClient, session.data, sessionId, transcriptSoFar],
+  );
+
+  /* ---------- live grading while blurting ---------- */
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      const chunk = speech.drain();
+      if (!chunk) return;
+      const at = lastGradeAt.current;
+      lastGradeAt.current = elapsed;
+      void gradeChunk(chunk, at, Math.max(1, elapsed - at));
+    }, GRADE_EVERY_MS);
+    return () => clearInterval(id);
+  }, [running, speech, gradeChunk, elapsed]);
+
+  /* ---------- start the blurt ---------- */
+  const startTeaching = async (payload: { notes: string; concepts: string[]; limit: number }) => {
+    setStarting(true);
+    try {
+      await updateSession(sessionId, {
+        notes_text: payload.notes,
+        key_concepts: payload.concepts,
+        blurt_limit_seconds: payload.limit,
+        stage: "teach",
+      });
+      const seeded = await seedQuestionsFn({
+        data: {
+          sessionTitle: session.data?.title ?? "this topic",
+          notes: payload.notes,
+          concepts: payload.concepts,
+        },
+      });
+      await addQuestions(
+        sessionId,
+        seeded.map((item) => ({
+          question: item.question,
+          concept: item.concept || null,
+          source: "material",
+        })),
+      );
+      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+      setElapsed(0);
+      lastGradeAt.current = 0;
+      speech.reset();
+      setVerdict("neutral");
+      setRunning(true);
+      if (speech.supported) speech.start();
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const flushRemaining = async () => {
+    const chunk = speech.drain() || typedBlurt.trim();
+    if (chunk) {
+      const at = lastGradeAt.current;
+      lastGradeAt.current = elapsed;
+      await gradeChunk(chunk, at, Math.max(1, elapsed - at));
+      setTypedBlurt("");
+    }
+  };
+
+  const pauseTeaching = () => {
+    setRunning(false);
+    speech.stop();
+    void flushRemaining();
+  };
+
+  const resumeTeaching = () => {
+    setRunning(true);
+    if (speech.supported) speech.start();
+  };
+
+  /* ---------- auto-finish when time is up ---------- */
+  useEffect(() => {
+    if (!running || remaining > 0) return;
+    setRunning(false);
+    speech.stop();
+    void flushRemaining().then(() => {
+      toast.info("Time's up — Sherlock has questions.");
+      openQa();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, remaining]);
+
+  /* ---------- Q&A ---------- */
+  const pendingQuestions = useMemo(
+    () => (questions.data ?? []).filter((question) => question.status === "pending"),
+    [questions.data],
+  );
+  const activeQuestion = followUp ?? (pendingQuestions[0]
+    ? { question: pendingQuestions[0].question, questionId: pendingQuestions[0].id }
+    : null);
+
+  const openQa = async () => {
+    setRunning(false);
+    speech.stop();
+    speech.reset();
+    setPanel("qa");
+    setVerdict("neutral");
+    if (stage !== "qa") {
+      await updateSession(sessionId, { stage: "qa" });
+      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    }
+  };
+
+  const submitAnswer = async (answer: string) => {
+    if (!activeQuestion || !session.data) return;
+    setQaBusy(true);
+    speech.stop();
+    try {
+      await addQaTurn({
+        session_id: sessionId,
+        question_id: activeQuestion.questionId,
+        role: "user",
+        content: answer,
+      });
+      const grade = await gradeAnswerFn({
+        data: {
+          sessionTitle: session.data.title,
+          notes,
+          question: activeQuestion.question,
+          answer,
+          followUpDepth,
+        },
+      });
+      setVerdict(grade.verdict);
+      await addQaTurn({
+        session_id: sessionId,
+        question_id: activeQuestion.questionId,
+        role: "sherlock",
+        content: grade.reply,
+        verdict: grade.verdict,
+      });
+      if (grade.missedConcept) {
+        await addLearnTopics(sessionId, [
+          { topic: grade.missedConcept, detail: grade.reply, origin: "qa" },
+        ]);
+        queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
+      }
+      if (grade.followUpQuestion && followUpDepth < 2) {
+        setFollowUp({ question: grade.followUpQuestion, questionId: activeQuestion.questionId });
+        setFollowUpDepth((depth) => depth + 1);
+        await addQaTurn({
+          session_id: sessionId,
+          question_id: activeQuestion.questionId,
+          role: "sherlock",
+          content: grade.followUpQuestion,
+          verdict: grade.verdict,
+        });
+      } else {
+        setFollowUp(null);
+        setFollowUpDepth(0);
+        if (activeQuestion.questionId) {
+          await setQuestionStatus(activeQuestion.questionId, grade.verdict === "green" ? "answered" : "missed");
+          queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+        }
+      }
+      speech.reset();
+      queryClient.invalidateQueries({ queryKey: ["qa", sessionId] });
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setQaBusy(false);
+    }
+  };
+
+  const skipQuestion = async () => {
+    if (!activeQuestion) return;
+    setFollowUp(null);
+    setFollowUpDepth(0);
+    setVerdict("yellow");
+    if (activeQuestion.questionId) {
+      await setQuestionStatus(activeQuestion.questionId, "missed");
+      queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+    }
+    speech.reset();
+  };
+
+  /* ---------- feedback report ---------- */
+  const report: Report | null = useMemo(() => {
+    const row = summary.data;
+    if (!row) return null;
+    return {
+      covered: stringsOf(row.covered),
+      answeredWell: stringsOf(row.answered_well),
+      gaps: stringsOf(row.gaps),
+      openQuestions: stringsOf(row.open_questions),
+      subtopicTime: (row.subtopic_time ?? {}) as Record<string, number>,
+      speakingSeconds: row.speaking_seconds,
+      exampleCount: row.example_count,
+      narrative: row.narrative ?? "",
+    };
+  }, [summary.data]);
+
+  const openFeedback = async () => {
+    setPanel("feedback");
+    speech.stop();
+    setRunning(false);
+    if (!session.data) return;
+    if (stage !== "feedback" && stage !== "learn") {
+      await updateSession(sessionId, { stage: "feedback" });
+      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    }
+    setReportBusy(true);
+    try {
+      const rows = segments.data ?? [];
+      const turns = qaTurns.data ?? [];
+      const subtopicTime: Record<string, number> = {};
+      let speakingSeconds = 0;
+      let exampleCount = 0;
+      for (const row of rows) {
+        const key = row.concept?.trim() || "General";
+        subtopicTime[key] = (subtopicTime[key] ?? 0) + row.duration_seconds;
+        speakingSeconds += row.duration_seconds;
+        exampleCount += row.example_count;
+      }
+      const stillOpen = (questions.data ?? [])
+        .filter((question) => question.status !== "answered")
+        .map((question) => question.question);
+
+      const result = await buildReportFn({
+        data: {
+          sessionTitle: session.data.title,
+          notes,
+          concepts,
+          transcript: rows.map((row) => row.transcript).join(" "),
+          qaLog: turns
+            .map((turn) => `${turn.role === "user" ? "Student" : "Sherlock"}: ${turn.content}`)
+            .join("\n"),
+          openQuestions: stillOpen,
+        },
+      });
+
+      await saveSummary({
+        session_id: sessionId,
+        covered: result.covered,
+        answered_well: result.answeredWell,
+        gaps: result.gaps,
+        open_questions: stillOpen,
+        subtopic_time: subtopicTime,
+        speaking_seconds: speakingSeconds,
+        example_count: exampleCount,
+        narrative: result.narrative,
+      });
+      if (result.gaps.length > 0) {
+        await addLearnTopics(
+          sessionId,
+          result.gaps.map((gap) => ({ topic: gap, detail: null, origin: "summary" })),
+        );
+        queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["summary", sessionId] });
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
+  /* ---------- learn mode ---------- */
+  const playAudio = async (text: string) => {
+    try {
+      const result = await speakFn({ data: { text: text.slice(0, 3500) } });
+      if (!result.ok) {
+        setVoiceNotice(result.message);
+        return;
+      }
+      setVoiceNotice(null);
+      audioRef.current?.pause();
+      const audio = new Audio(`data:audio/mpeg;base64,${result.audio}`);
+      audioRef.current = audio;
+      await audio.play();
+    } catch (error) {
+      console.error(error);
+      setVoiceNotice("Sherlock's voice didn't come through — his words are on screen.");
+    }
+  };
+
+  const openLearn = async () => {
+    setPanel("learn");
+    if (stage !== "learn") {
+      await updateSession(sessionId, { stage: "learn" });
+      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    }
+    if ((learnMessages.data ?? []).length === 0) {
+      void sendLearn("Start with the first thing I missed, and keep it short.");
+    }
+  };
+
+  const sendLearn = async (message: string) => {
+    if (!session.data) return;
+    setLearnBusy(true);
+    try {
+      await addLearnMessage(sessionId, "user", message);
+      queryClient.invalidateQueries({ queryKey: ["learn-messages", sessionId] });
+      const history = (learnMessages.data ?? []).map((row) => ({ role: row.role, content: row.content }));
+      const result = await learnReplyFn({
+        data: {
+          sessionTitle: session.data.title,
+          notes,
+          focus: (learnTopics.data ?? []).map((topic) => topic.topic),
+          history,
+          message,
+        },
+      });
+      await addLearnMessage(sessionId, "sherlock", result.reply);
+      queryClient.invalidateQueries({ queryKey: ["learn-messages", sessionId] });
+      setVerdict("neutral");
+      void playAudio(result.reply);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setLearnBusy(false);
+    }
+  };
+
+  /* ---------- new teach session over the same material ---------- */
+  const teachAgain = async () => {
+    await clearSegments(sessionId);
+    await updateSession(sessionId, { stage: "teach" });
+    queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
+    queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    setPanel("none");
+    setElapsed(0);
+    lastGradeAt.current = 0;
+    speech.reset();
+    setVerdict("neutral");
+    setRunning(true);
+    if (speech.supported) speech.start();
+  };
+
+  useEffect(() => () => audioRef.current?.pause(), []);
+
+  if (session.isPending) {
+    return <p className="p-10 text-muted-foreground">Opening the case…</p>;
+  }
+  if (!session.data) {
+    return (
+      <div className="p-10">
+        <p className="text-lg">This session no longer exists.</p>
+        <Button className="mt-4" onClick={() => navigate({ to: "/" })}>
+          Back to notebooks
+        </Button>
+      </div>
+    );
+  }
+
+  const backToNotebook = () =>
+    navigate({ to: "/notebook/$notebookId", params: { notebookId: session.data!.notebook_id } });
+
+  if (stage === "material") {
+    return (
+      <main className="min-h-screen">
+        <div className="mx-auto max-w-5xl px-5 pt-8">
+          <button
+            type="button"
+            onClick={backToNotebook}
+            className="label-caps inline-flex items-center gap-2 text-brass hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to notebook
+          </button>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight">{session.data.title}</h1>
+        </div>
+        <MaterialStage
+          initialNotes={notes}
+          initialConcepts={concepts}
+          initialLimit={limit}
+          busy={starting}
+          onStart={startTeaching}
+        />
+      </main>
+    );
+  }
+
+  const timerTone =
+    remaining <= 15 ? "text-verdict-red" : remaining <= 60 ? "text-gold" : "text-foreground";
+
+  return (
+    <main className="min-h-screen px-4 py-6 sm:px-6">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_400px]">
+        {/* ---- stage: Sherlock, timer, recorder ---- */}
+        <section className="relative flex flex-col items-center">
+          <button
+            type="button"
+            onClick={backToNotebook}
+            aria-label="Back to notebook"
+            className="label-caps absolute left-0 top-0 inline-flex items-center gap-2 text-brass hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+
+          <div className="mt-10 text-center">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{session.data.title}</h1>
+            {stage === "teach" && panel === "none" && (
+              <p className={cn("mt-1 text-4xl font-semibold tabular-nums transition-colors", timerTone)}>
+                {mmss(remaining)}
+              </p>
+            )}
+          </div>
+
+          <SherlockFace verdict={verdict} className="mt-4" />
+
+          <div className="mt-4">
+            <RecorderOrb
+              listening={speech.listening}
+              speaking={speech.speaking}
+              disabled={!speech.supported}
+              onToggle={() => (speech.listening ? speech.stop() : speech.start())}
+              label={
+                !speech.supported
+                  ? "Mic unavailable"
+                  : grading
+                    ? "Sherlock is following"
+                    : undefined
+              }
+            />
+          </div>
+
+          {stage === "teach" && panel === "none" && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {running ? (
+                <Button variant="secondary" onClick={pauseTeaching}>
+                  <Pause className="mr-2 h-4 w-4" /> Pause
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={resumeTeaching}>
+                  <Play className="mr-2 h-4 w-4" /> Resume
+                </Button>
+              )}
+              <Button onClick={openQa}>I'm finished explaining</Button>
+            </div>
+          )}
+
+          {(speech.interimText || speech.finalText) && panel === "none" && (
+            <p className="mt-5 max-h-32 max-w-xl overflow-y-auto text-center text-sm leading-snug text-muted-foreground">
+              {speech.finalText.slice(-400)}
+              <span className="text-foreground">{speech.interimText}</span>
+            </p>
+          )}
+
+          {panel === "none" && speech.supported && (
+            <button
+              type="button"
+              onClick={() => setShowTyping((value) => !value)}
+              className="label-caps mt-4 text-brass hover:underline"
+            >
+              {showTyping ? "Hide typing" : "Type instead"}
+            </button>
+          )}
+
+          {(!speech.supported || showTyping) && panel === "none" && (
+            <div className="mt-5 w-full max-w-xl">
+              <p className="text-sm text-muted-foreground">
+                Type what you'd say instead — Sherlock reacts the
+                same way.
+              </p>
+              <Textarea
+                value={typedBlurt}
+                onChange={(event) => setTypedBlurt(event.target.value)}
+                placeholder="Explain it here…"
+                className="mt-2 min-h-24"
+              />
+              <Button
+                className="mt-2"
+                variant="secondary"
+                disabled={!typedBlurt.trim() || grading}
+                onClick={() => {
+                  const chunk = typedBlurt.trim();
+                  setTypedBlurt("");
+                  const at = lastGradeAt.current;
+                  lastGradeAt.current = elapsed;
+                  void gradeChunk(chunk, at, Math.max(1, elapsed - at));
+                }}
+              >
+                Send to Sherlock
+              </Button>
+            </div>
+          )}
+        </section>
+
+        {/* ---- right rail: icon buttons or the open panel ---- */}
+        <aside className="lg:min-h-[32rem]">
+          {panel === "none" && (
+            <div className="flex justify-center gap-4 lg:flex-col lg:items-end lg:justify-start">
+              <button
+                type="button"
+                onClick={openQa}
+                aria-label="Mid-session Q&A"
+                title="Mid-session Q&A"
+                className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-foreground/20 bg-card transition-colors hover:border-gold"
+              >
+                <QuestionBubbleIcon className="h-8 w-8 text-foreground" />
+              </button>
+              <button
+                type="button"
+                onClick={openFeedback}
+                aria-label="Session feedback"
+                title="Session feedback"
+                className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-foreground/20 bg-card transition-colors hover:border-gold"
+              >
+                <TreasureChestIcon className="h-8 w-8 text-foreground" />
+              </button>
+            </div>
+          )}
+
+          {panel === "qa" && (
+            <QaPanel
+              question={activeQuestion?.question ?? null}
+              entries={(qaTurns.data ?? []).map((turn) => ({
+                id: turn.id,
+                role: turn.role,
+                content: turn.content,
+                verdict: verdictOf(turn.verdict),
+              }))}
+              busy={qaBusy}
+              remaining={Math.max(0, pendingQuestions.length - 1)}
+              liveText={`${speech.finalText}${speech.interimText}`}
+              listening={speech.listening}
+              micSupported={speech.supported}
+              onToggleMic={() => (speech.listening ? speech.stop() : speech.start())}
+              onSubmit={submitAnswer}
+              onSkip={skipQuestion}
+              onBack={() => setPanel("none")}
+              onFinish={openFeedback}
+            />
+          )}
+
+          {panel === "feedback" && (
+            <FeedbackPanel
+              report={report}
+              loading={reportBusy}
+              onBack={() => setPanel("none")}
+              onLearn={openLearn}
+              onNewTeach={teachAgain}
+            />
+          )}
+
+          {panel === "learn" && (
+            <LearnPanel
+              entries={(learnMessages.data ?? []).map((row) => ({
+                id: row.id,
+                role: row.role,
+                content: row.content,
+              }))}
+              focus={(learnTopics.data ?? []).map((topic) => topic.topic)}
+              busy={learnBusy}
+              voiceNotice={voiceNotice}
+              onSend={sendLearn}
+              onReplay={playAudio}
+              onBack={() => setPanel("feedback")}
+            />
+          )}
+        </aside>
+      </div>
+    </main>
+  );
+}
