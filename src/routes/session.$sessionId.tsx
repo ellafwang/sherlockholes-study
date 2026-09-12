@@ -14,6 +14,7 @@ import { QaPanel, verdictOf } from "@/components/session/QaPanel";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useMicLevels } from "@/hooks/useMicLevels";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
   addLearnMessage,
