@@ -1,5 +1,6 @@
 import { ArrowLeft, RotateCcw } from "lucide-react";
 
+import { MathText } from "@/components/MathText";
 import { LightbulbIcon, TreasureChestIcon } from "@/components/MysteryIcons";
 import { Button } from "@/components/ui/button";
 
@@ -31,7 +32,9 @@ function List({ title, items, empty }: { title: string; items: string[]; empty: 
           {items.map((item, index) => (
             <li key={`${item}-${index}`} className="flex gap-2">
               <span className="text-gold">•</span>
-              <span>{item}</span>
+              <span>
+                <MathText>{item}</MathText>
+              </span>
             </li>
           ))}
         </ul>

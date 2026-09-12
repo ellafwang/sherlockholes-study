@@ -1,6 +1,7 @@
 import { ArrowLeft, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { MathText } from "@/components/MathText";
 import { QuestionBubbleIcon } from "@/components/MysteryIcons";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
