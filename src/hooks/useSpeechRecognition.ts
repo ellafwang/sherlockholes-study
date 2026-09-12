@@ -5,6 +5,7 @@ import { transcribeSpeech } from "@/lib/voice.functions";
 
 /* How long each complete WAV clip is before it is sent for transcription. */
 const CLIP_MS = 4500;
+const WAVEFORM_BARS = 28;
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -102,6 +103,7 @@ export type SpeechState = {
   /** True while the student's voice is actually coming through. */
   speaking: boolean;
   transcribing: boolean;
+  levels: number[];
   error: string | null;
   start: () => void;
   /** Stops recording, waits for the final clip, and returns all unconsumed speech. */
@@ -126,6 +128,7 @@ export function useSpeechRecognition(): SpeechState {
   const [interimText, setInterimText] = useState("");
   const [speaking, setSpeaking] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [levels, setLevels] = useState<number[]>(() => new Array(WAVEFORM_BARS).fill(0));
   const [error, setError] = useState<string | null>(null);
 
   const wantsListeningRef = useRef(false);
@@ -264,6 +267,7 @@ export function useSpeechRecognition(): SpeechState {
     if (context) void context.close().catch(() => undefined);
     setInterimText("");
     setSpeaking(false);
+    setLevels(new Array(WAVEFORM_BARS).fill(0));
     return pendingTranscriptionsRef.current;
   }, [flushPcm]);
 
@@ -295,7 +299,9 @@ export function useSpeechRecognition(): SpeechState {
           pcmRef.current.push(samples);
           let energy = 0;
           for (let i = 0; i < samples.length; i += 1) energy += (samples[i] ?? 0) ** 2;
-          if (Math.sqrt(energy / samples.length) > 0.012) markSpeaking();
+          const level = Math.min(1, Math.sqrt(energy / samples.length) * 4);
+          setLevels((current) => [...current.slice(1), level]);
+          if (level > 0.048) markSpeaking();
         };
         source.connect(processor);
         processor.connect(context.destination);
@@ -348,6 +354,7 @@ export function useSpeechRecognition(): SpeechState {
     interimText,
     speaking,
     transcribing,
+    levels,
     error,
     start,
     stop,

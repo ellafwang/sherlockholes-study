@@ -14,7 +14,6 @@ import { QaPanel, verdictOf } from "@/components/session/QaPanel";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useMicLevels } from "@/hooks/useMicLevels";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
   addLearnMessage,
@@ -73,7 +72,6 @@ function SessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const speech = useSpeechRecognition();
-  const micLevels = useMicLevels(speech.listening);
 
   const gradeBlurtFn = useServerFn(gradeBlurt);
   const gradeAnswerFn = useServerFn(gradeAnswer);
@@ -703,7 +701,7 @@ function SessionPage() {
               speaking={speech.speaking}
               disabled={!speech.supported}
               onToggle={toggleRecorder}
-              levels={micLevels}
+              levels={speech.levels}
               wordCount={spokenWords}
               label={
                 !speech.supported
