@@ -607,10 +607,9 @@ function SessionPage() {
         exampleCount,
         narrative: result.narrative,
       };
-      speakOnce(
-        `report:${sessionId}:${result.narrative.slice(0, 40)}`,
-        reportSpeechText(freshReport),
-      );
+      feedbackSpokenRef.current = true;
+      stopAudio();
+      queueAudio(reportSpeechText(freshReport));
 
       const existing = new Set(
         ((await listLearnTopics(sessionId)) ?? []).map((topic) =>
@@ -634,23 +633,46 @@ function SessionPage() {
   };
 
   /* ---------- learn mode ---------- */
-  const stopAudio = () => {
+  /* bumped on every stop so queued speech from a closed panel never starts */
+  const speechTokenRef = useRef(0);
+  const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
+  /* bumped only by stopAudio, so queued lines survive each other's playback */
+  const speechGenRef = useRef(0);
+
+  /* stops whatever is playing without cancelling anything queued behind it */
+  const stopPlayback = () => {
+    speechTokenRef.current += 1;
     pendingPlayRef.current = null;
-    audioRef.current?.pause();
+    const audio = audioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onpause = null;
+      audio.pause();
+    }
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
     }
     setSpeaking(false);
+    setVoiceLoading(false);
+  };
+
+  /* full stop: current line and everything queued after it */
+  const stopAudio = () => {
+    speechGenRef.current += 1;
+    speechQueueRef.current = Promise.resolve();
+    stopPlayback();
   };
 
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
-    stopAudio();
+    stopPlayback();
+    const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
       const result = await speakFn({ data: { text: spoken.slice(0, 3500) } });
+      if (token !== speechTokenRef.current) return;
       if (!result.ok) {
         setVoiceNotice(result.message);
         return;
@@ -669,28 +691,40 @@ function SessionPage() {
       audioRef.current = audio;
       audio.src = url;
       audio.preload = "auto";
-      audio.onended = () => setSpeaking(false);
-      audio.onpause = () => setSpeaking(false);
 
-      const start = async () => {
-        setSpeaking(true);
-        await audio.play();
-        setVoiceNotice(null);
-      };
-
-      try {
-        await start();
-      } catch (error) {
-        // Autoplay policy: speech generated without a click cannot start on its
-        // own. Keep it ready and let the next tap anywhere release it.
-        if ((error as Error).name === "NotAllowedError") {
+      await new Promise<void>((resolve) => {
+        const finish = () => {
           setSpeaking(false);
-          pendingPlayRef.current = start;
-          setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
-        } else {
-          throw error;
-        }
-      }
+          resolve();
+        };
+        audio.onended = finish;
+        audio.onpause = finish;
+
+        const start = async () => {
+          if (token !== speechTokenRef.current) {
+            resolve();
+            return;
+          }
+          setSpeaking(true);
+          await audio.play();
+          setVoiceNotice(null);
+        };
+
+        void start().catch((error: Error) => {
+          // Autoplay policy: speech generated without a click cannot start on
+          // its own. Keep it ready and let the next tap anywhere release it.
+          if (error.name === "NotAllowedError") {
+            setSpeaking(false);
+            pendingPlayRef.current = start;
+            setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
+          } else {
+            console.error(error);
+            setSpeaking(false);
+            setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+          }
+          resolve();
+        });
+      });
     } catch (error) {
       console.error(error);
       setSpeaking(false);
@@ -699,6 +733,15 @@ function SessionPage() {
       setVoiceLoading(false);
     }
   };
+
+  /* speak one thing after another instead of cutting the previous line off */
+  const queueAudio = (text: string) => {
+    const generation = speechGenRef.current;
+    speechQueueRef.current = speechQueueRef.current
+      .then(() => (generation === speechGenRef.current ? playAudio(text) : undefined))
+      .catch(() => undefined);
+  };
+
 
   /* release any speech that autoplay blocked, on the student's next tap */
   useEffect(() => {
@@ -718,6 +761,7 @@ function SessionPage() {
 
   /* ---------- Sherlock speaks every question and the feedback report ---------- */
   const spokenOnceRef = useRef<Set<string>>(new Set());
+  const feedbackSpokenRef = useRef(false);
   const speakOnce = (key: string, text: string) => {
     if (!text.trim()) return;
     if (spokenOnceRef.current.has(key)) return;
@@ -732,13 +776,17 @@ function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, activeQuestion?.question, activeQuestion?.questionId]);
 
-  /* the feedback summary is read aloud as soon as the report is ready */
+  /* the feedback summary is read aloud the moment the feedback tab opens, and
+     re-read on each fresh visit to it */
   useEffect(() => {
-    if (panel !== "feedback" || reportBusy || !report) return;
-    speakOnce(
-      `report:${sessionId}:${report.narrative.slice(0, 40)}`,
-      reportSpeechText(report),
-    );
+    if (panel !== "feedback") {
+      feedbackSpokenRef.current = false;
+      return;
+    }
+    if (reportBusy || !report || feedbackSpokenRef.current) return;
+    feedbackSpokenRef.current = true;
+    stopAudio();
+    queueAudio(reportSpeechText(report));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, reportBusy, report]);
 
@@ -790,6 +838,10 @@ function SessionPage() {
 
   const openLearn = async () => {
     setPanel("learn");
+    // Sherlock reads the feedback report aloud when the lesson opens, then the
+    // first lesson follows it instead of cutting it off.
+    stopAudio();
+    if (report) queueAudio(reportSpeechText(report));
     if (stage !== "learn") {
       await updateSession(sessionId, { stage: "learn" });
       queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
@@ -828,7 +880,7 @@ function SessionPage() {
       await addLearnMessage(sessionId, "sherlock", result.reply);
       queryClient.invalidateQueries({ queryKey: ["learn-messages", sessionId] });
       setVerdict("neutral");
-      void playAudio(result.reply);
+      queueAudio(result.reply);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -1207,9 +1259,15 @@ function SessionPage() {
             <FeedbackPanel
               report={report}
               loading={reportBusy}
-              onBack={() => setPanel("none")}
+              onBack={() => {
+                stopAudio();
+                setPanel("none");
+              }}
               onLearn={openLearn}
-              onNewTeach={teachAgain}
+              onNewTeach={() => {
+                stopAudio();
+                void teachAgain();
+              }}
             />
           )}
 
