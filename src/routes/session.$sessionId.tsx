@@ -877,10 +877,16 @@ function SessionPage() {
               nextTopic={nextLearnTopic}
               busy={learnBusy}
               voiceNotice={voiceNotice}
+              speaking={speaking}
+              voiceLoading={voiceLoading}
               onSend={sendLearn}
               onTeachTopic={teachTopic}
               onReplay={playAudio}
-              onBack={() => setPanel("feedback")}
+              onStopVoice={stopAudio}
+              onBack={() => {
+                stopAudio();
+                setPanel("feedback");
+              }}
             />
           )}
         </aside>
