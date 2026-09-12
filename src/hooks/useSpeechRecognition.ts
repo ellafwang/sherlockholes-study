@@ -1,7 +1,7 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { transcribeSpeech } from "@/lib/voice.functions";
+import { transcribeSpeech, type TranscriptTurn } from "@/lib/voice.functions";
 
 /* How long each complete WAV clip is before it is sent for transcription.
    Short clips keep the words arriving almost as fast as they are spoken. */
@@ -94,6 +94,13 @@ function encodeWav(chunks: Float32Array[], inputRate: number): Blob {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
+export type SpeechOptions = {
+  /** ISO-639-3 code pinned for transcription, e.g. "eng". */
+  languageCode?: string;
+  /** Jargon, acronyms and names that bias spelling. */
+  keyterms?: string[];
+};
+
 export type SpeechState = {
   supported: boolean;
   listening: boolean;
@@ -105,6 +112,10 @@ export type SpeechState = {
   speaking: boolean;
   transcribing: boolean;
   levels: number[];
+  /** Diarized speaker turns with timestamps, in order. */
+  turns: TranscriptTurn[];
+  /** Non-speech events (laughter, applause) detected in the audio. */
+  events: string[];
   error: string | null;
   start: () => void;
   /** Stops recording, waits for the final clip, and returns all unconsumed speech. */
@@ -120,8 +131,10 @@ export type SpeechState = {
  * The browser's own recogniser, when present, only supplies live captions
  * while a clip is still being spoken.
  */
-export function useSpeechRecognition(): SpeechState {
+export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
   const transcribe = useServerFn(transcribeSpeech);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
@@ -130,6 +143,8 @@ export function useSpeechRecognition(): SpeechState {
   const [speaking, setSpeaking] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [levels, setLevels] = useState<number[]>(() => new Array(WAVEFORM_BARS).fill(0));
+  const [turns, setTurns] = useState<TranscriptTurn[]>([]);
+  const [events, setEvents] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const wantsListeningRef = useRef(false);
@@ -144,6 +159,8 @@ export function useSpeechRecognition(): SpeechState {
   const finalRef = useRef("");
   const speakingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTranscriptionsRef = useRef<Promise<void>>(Promise.resolve());
+  /** Seconds of audio already sent, used to place each clip on one timeline. */
+  const elapsedAudioRef = useRef(0);
 
   useEffect(() => {
     setSupported(
@@ -160,18 +177,51 @@ export function useSpeechRecognition(): SpeechState {
   }, []);
 
   const sendClip = useCallback(
-    (blob: Blob, mimeType: string) => {
+    (blob: Blob, mimeType: string, offsetSeconds = 0) => {
       if (blob.size < 4000) return; // near-silence or an empty container
       setTranscribing(true);
       pendingTranscriptionsRef.current = pendingTranscriptionsRef.current
         .then(async () => {
           const audio = await toBase64(blob);
-          const result = await transcribe({ data: { audio, mimeType: mimeType || "audio/webm" } });
+          const result = await transcribe({
+            data: {
+              audio,
+              mimeType: mimeType || "audio/webm",
+              languageCode: optionsRef.current.languageCode ?? "eng",
+              keyterms: optionsRef.current.keyterms ?? [],
+            },
+          });
           if (!result.ok) {
             setError(result.message);
             return;
           }
           const text = result.text.trim();
+          if (result.events.length > 0) {
+            setEvents((current) => [...current, ...result.events].slice(-20));
+          }
+          if (result.turns.length > 0) {
+            const shifted = result.turns.map((turn) => ({
+              ...turn,
+              start: turn.start + offsetSeconds,
+              end: turn.end + offsetSeconds,
+            }));
+            setTurns((current) => {
+              const merged = [...current];
+              for (const turn of shifted) {
+                const last = merged[merged.length - 1];
+                if (last && last.speaker === turn.speaker) {
+                  merged[merged.length - 1] = {
+                    ...last,
+                    text: `${last.text} ${turn.text}`.trim(),
+                    end: turn.end,
+                  };
+                } else {
+                  merged.push(turn);
+                }
+              }
+              return merged;
+            });
+          }
           if (!text) return;
           setError(null);
           finalRef.current = `${finalRef.current}${text} `;
@@ -204,9 +254,12 @@ export function useSpeechRecognition(): SpeechState {
         count += 1;
       }
     }
+    const duration = count / context.sampleRate;
+    const offset = elapsedAudioRef.current;
+    elapsedAudioRef.current += duration;
     if (count === 0 || Math.sqrt(energy / count) < 0.006) return;
     const blob = encodeWav(chunks, context.sampleRate);
-    if (blob.size >= 2_048) sendClip(blob, "audio/wav");
+    if (blob.size >= 2_048) sendClip(blob, "audio/wav", offset);
   }, [sendClip]);
 
   const scheduleFlush = useCallback(() => {
@@ -340,8 +393,11 @@ export function useSpeechRecognition(): SpeechState {
   const reset = useCallback(() => {
     finalRef.current = "";
     consumedRef.current = 0;
+    elapsedAudioRef.current = 0;
     setFinalText("");
     setInterimText("");
+    setTurns([]);
+    setEvents([]);
   }, []);
 
   const drain = useCallback(() => {
@@ -366,6 +422,8 @@ export function useSpeechRecognition(): SpeechState {
     speaking,
     transcribing,
     levels,
+    turns,
+    events,
     error,
     start,
     stop,
