@@ -671,6 +671,37 @@ function SessionPage() {
     };
   }, []);
 
+  /* ---------- Sherlock speaks every question and the feedback report ---------- */
+  const spokenOnceRef = useRef<Set<string>>(new Set());
+  const speakOnce = (key: string, text: string) => {
+    if (!text.trim()) return;
+    if (spokenOnceRef.current.has(key)) return;
+    spokenOnceRef.current.add(key);
+    void playAudio(text);
+  };
+
+  /* any question that pops up — Q&A or a follow-up — is asked out loud in full */
+  useEffect(() => {
+    if (panel !== "qa" || !activeQuestion) return;
+    speakOnce(`q:${activeQuestion.questionId ?? activeQuestion.question}`, activeQuestion.question);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, activeQuestion?.question, activeQuestion?.questionId]);
+
+  /* the feedback summary is read aloud as soon as the report is ready */
+  useEffect(() => {
+    if (panel !== "feedback" || reportBusy || !report) return;
+    const lines = [
+      report.narrative,
+      report.covered.length ? `You covered ${report.covered.join(", ")}.` : "",
+      report.answeredWell.length ? `You answered well on ${report.answeredWell.join(", ")}.` : "",
+      report.gaps.length ? `Still shaky: ${report.gaps.join(", ")}.` : "",
+      report.openQuestions.length ? `Open questions: ${report.openQuestions.join(" ")}` : "",
+      `You spoke for ${Math.round(report.speakingSeconds)} seconds and gave ${report.exampleCount} examples.`,
+    ].filter(Boolean);
+    speakOnce(`report:${sessionId}:${report.narrative.slice(0, 40)}`, lines.join(" "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, reportBusy, report]);
+
   /* the lesson plan: gaps and open questions from the report first, then the
      session's own key concepts so there is always something to be taught */
   const learnPlan = useMemo(() => {
