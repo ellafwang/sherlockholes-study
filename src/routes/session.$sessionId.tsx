@@ -383,6 +383,7 @@ function SessionPage() {
       });
 
       setVerdict(grade.verdict);
+      setReaction(grade.reply?.trim() || null);
       await addQaTurn({
         session_id: sessionId,
         question_id: activeQuestion.questionId,
