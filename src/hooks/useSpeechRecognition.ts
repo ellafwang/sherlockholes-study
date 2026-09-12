@@ -3,9 +3,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { transcribeSpeech, type TranscriptTurn } from "@/lib/voice.functions";
 
-/* How long each complete WAV clip is before it is sent for transcription.
-   Short clips keep the words arriving almost as fast as they are spoken. */
-const CLIP_MS = 1200;
+/* Clips are cut at natural pauses instead of on a fixed drumbeat: a very short
+   clip gives the transcriber half-words to guess from, which is what makes it
+   invent words. We check often, but only send once a sentence has finished. */
+const TICK_MS = 250;
+/** Never send a clip shorter than this — too little speech to transcribe safely. */
+const MIN_CLIP_SECONDS = 1.6;
+/** Send as soon as the speaker has been quiet this long (end of a sentence). */
+const SILENCE_SECONDS = 0.7;
+/** Send anyway after this much continuous speech, so long answers still stream. */
+const MAX_CLIP_SECONDS = 12;
+/** Loudness below this counts as silence rather than speech. */
+const VOICE_RMS = 0.012;
 const WAVEFORM_BARS = 28;
 
 type SpeechRecognitionLike = {
@@ -161,6 +170,10 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
   const pendingTranscriptionsRef = useRef<Promise<void>>(Promise.resolve());
   /** Seconds of audio already sent, used to place each clip on one timeline. */
   const elapsedAudioRef = useRef(0);
+  /** Seconds of audio waiting in the buffer, and how much of it held a voice. */
+  const bufferedSecondsRef = useRef(0);
+  const voicedSecondsRef = useRef(0);
+  const silenceSecondsRef = useRef(0);
 
   useEffect(() => {
     setSupported(
@@ -244,6 +257,9 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
     const context = audioContextRef.current;
     const chunks = pcmRef.current;
     pcmRef.current = [];
+    bufferedSecondsRef.current = 0;
+    silenceSecondsRef.current = 0;
+    voicedSecondsRef.current = 0;
     if (!context || chunks.length === 0) return;
     // Skip clips that hold no voice at all, so silence never costs a round trip.
     let energy = 0;
@@ -257,17 +273,32 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
     const duration = count / context.sampleRate;
     const offset = elapsedAudioRef.current;
     elapsedAudioRef.current += duration;
-    if (count === 0 || Math.sqrt(energy / count) < 0.006) return;
+    // Too short, or too quiet, means guesswork for the transcriber — drop it.
+    if (count === 0 || duration < 0.5 || Math.sqrt(energy / count) < 0.008) return;
     const blob = encodeWav(chunks, context.sampleRate);
     if (blob.size >= 2_048) sendClip(blob, "audio/wav", offset);
   }, [sendClip]);
 
+  /** Cuts the clip at a natural pause instead of mid-word. */
   const scheduleFlush = useCallback(() => {
     if (!wantsListeningRef.current) return;
     cycleTimer.current = setTimeout(() => {
-      flushPcm();
+      const buffered = bufferedSecondsRef.current;
+      const voiced = voicedSecondsRef.current;
+      const silence = silenceSecondsRef.current;
+      const finishedSentence =
+        buffered >= MIN_CLIP_SECONDS && voiced >= 0.4 && silence >= SILENCE_SECONDS;
+      if (finishedSentence || buffered >= MAX_CLIP_SECONDS) {
+        flushPcm();
+      } else if (buffered >= MIN_CLIP_SECONDS && voiced < 0.2) {
+        // Nothing but room noise so far: throw it away rather than transcribe it.
+        pcmRef.current = [];
+        bufferedSecondsRef.current = 0;
+        silenceSecondsRef.current = 0;
+        voicedSecondsRef.current = 0;
+      }
       scheduleFlush();
-    }, CLIP_MS);
+    }, TICK_MS);
   }, [flushPcm]);
 
   const startCaptions = useCallback(() => {
@@ -369,7 +400,16 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
           pcmRef.current.push(samples);
           let energy = 0;
           for (let i = 0; i < samples.length; i += 1) energy += (samples[i] ?? 0) ** 2;
-          const level = Math.min(1, Math.sqrt(energy / samples.length) * 4);
+          const rms = Math.sqrt(energy / samples.length);
+          const chunkSeconds = samples.length / context.sampleRate;
+          bufferedSecondsRef.current += chunkSeconds;
+          if (rms >= VOICE_RMS) {
+            voicedSecondsRef.current += chunkSeconds;
+            silenceSecondsRef.current = 0;
+          } else {
+            silenceSecondsRef.current += chunkSeconds;
+          }
+          const level = Math.min(1, rms * 4);
           setLevels((current) => [...current.slice(1), level]);
           if (level > 0.048) markSpeaking();
         };
