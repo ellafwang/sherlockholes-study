@@ -55,6 +55,7 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     const form = new FormData();
     form.append("file", new Blob([bytes], { type: data.mimeType }), `blurt.${extension}`);
     form.append("model_id", "scribe_v2");
+    form.append("language_code", "en");
     form.append("tag_audio_events", "false");
     form.append("diarize", "false");
 
