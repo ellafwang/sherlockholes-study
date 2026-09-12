@@ -429,6 +429,7 @@ function SessionPage() {
     setFollowUp(null);
     setFollowUpDepth(0);
     setVerdict("yellow");
+    setReaction("I still don't understand that one — let's come back to it.");
     if (activeQuestion.questionId) {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
