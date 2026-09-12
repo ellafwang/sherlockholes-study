@@ -644,6 +644,35 @@ function SessionPage() {
             />
           </div>
 
+          {concepts.length > 0 && (panel === "none" || stage === "teach") && (
+            <div className="mx-auto mt-5 w-full max-w-md">
+              <div className="label-caps flex items-center justify-between text-muted-foreground">
+                <span>Explanation covered</span>
+                <span className="tabular-nums text-brass">
+                  {coverage.covered.length}/{concepts.length} · {coverage.percent}%
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={coverage.percent}
+                aria-label="Explanation coverage"
+                className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-muted/60"
+              >
+                <div
+                  className="h-full rounded-full bg-brass transition-[width] duration-700 ease-out"
+                  style={{ width: `${coverage.percent}%` }}
+                />
+              </div>
+              {coverage.percent < 100 && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Still to cover: {concepts.filter((c) => !coverage.covered.includes(c)).join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {stage === "teach" && panel === "none" && (
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {running ? (
