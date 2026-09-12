@@ -171,6 +171,7 @@ function SessionPage() {
           },
         });
         setVerdict(grade.verdict);
+        setReaction(grade.note?.trim() || null);
         await addSegment({
           session_id: sessionId,
           transcript: chunk,
