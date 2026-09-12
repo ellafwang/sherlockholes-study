@@ -343,7 +343,13 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
     void (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 48000,
+          },
         });
         if (!wantsListeningRef.current) {
           stream.getTracks().forEach((track) => track.stop());
