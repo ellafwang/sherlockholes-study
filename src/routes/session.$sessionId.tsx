@@ -255,6 +255,20 @@ function SessionPage() {
     if (speech.supported) speech.start();
   };
 
+  /**
+   * The recorder button: starting it listens (and keeps the clock running),
+   * stopping it hands everything captured so far to Sherlock.
+   */
+  const toggleRecorder = () => {
+    if (speech.listening) {
+      speech.stop();
+      if (stage === "teach" && panel === "none") void flushRemaining();
+      return;
+    }
+    speech.start();
+    if (stage === "teach" && panel === "none" && remaining > 0) setRunning(true);
+  };
+
   /* ---------- auto-finish when time is up ---------- */
   useEffect(() => {
     if (!running || remaining > 0) return;
@@ -596,13 +610,17 @@ function SessionPage() {
               listening={speech.listening}
               speaking={speech.speaking}
               disabled={!speech.supported}
-              onToggle={() => (speech.listening ? speech.stop() : speech.start())}
+              onToggle={toggleRecorder}
+              levels={micLevels}
+              wordCount={spokenWords}
               label={
                 !speech.supported
                   ? "Mic unavailable"
                   : grading
                     ? "Sherlock is following"
-                    : undefined
+                    : speech.listening
+                      ? undefined
+                      : "Tap to speak"
               }
             />
           </div>
