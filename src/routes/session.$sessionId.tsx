@@ -745,6 +745,25 @@ function SessionPage() {
 
           <SherlockFace verdict={verdict} className="mt-4" />
 
+          {reaction && (
+            <p
+              aria-live="polite"
+              className="mt-2 max-w-md text-center text-base italic"
+              style={{
+                color:
+                  verdict === "green"
+                    ? "var(--verdict-green)"
+                    : verdict === "yellow"
+                      ? "var(--brass)"
+                      : verdict === "red"
+                        ? "var(--verdict-red)"
+                        : "var(--muted-foreground)",
+              }}
+            >
+              “{reaction}”
+            </p>
+          )}
+
           <div className="mt-4">
             <RecorderOrb
               listening={speech.listening}
