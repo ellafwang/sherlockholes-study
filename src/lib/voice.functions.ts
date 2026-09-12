@@ -36,6 +36,35 @@ function toGeminiLanguage(code: string): string {
   return iso3ToIso1[normalized] ?? normalized.slice(0, 2);
 }
 
+/* Stock phrases transcribers produce when a clip holds no real speech. Kept out
+   of the transcript so silence never turns into words the student never said. */
+const INVENTED_LINES = [
+  "thank you",
+  "thank you.",
+  "thanks for watching",
+  "thank you for watching",
+  "subtitles by the amara.org community",
+  "please subscribe",
+  "you",
+  "bye",
+  "okay",
+  "mm-hmm",
+  "[music]",
+  "[silence]",
+  "[inaudible]",
+  "(silence)",
+];
+
+/** Blanks a transcript that is only filler the model invented from quiet audio. */
+function dropInventedText(text: string): string {
+  const bare = text.toLowerCase().replace(/[.,!?"'\u2019]/g, "").trim();
+  if (!bare) return "";
+  if (INVENTED_LINES.includes(bare)) return "";
+  // A one-word clip is almost always a guess rather than a heard word.
+  if (bare.split(/\s+/).length < 2 && bare.length < 4) return "";
+  return text;
+}
+
 /**
  * Transcribes a clip of the student's voice with Gemini 3.5 Transcribe
  * through the Lovable AI Gateway, with the language pinned (never auto-detect)
