@@ -86,8 +86,7 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     return { ok: true, text: (body.text ?? "").trim() };
   });
 
-// George — a measured, British-sounding narrator voice for Sherlock.
-const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+const VOICE_ID = "7EzWGsX10sAS4c9m9cPf";
 
 export type SpeakResult =
   | { ok: true; audio: string }
