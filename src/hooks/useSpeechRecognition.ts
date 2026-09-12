@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { transcribeSpeech } from "@/lib/voice.functions";
 
-/* How long each complete WAV clip is before it is sent for transcription. */
-const CLIP_MS = 4500;
+/* How long each complete WAV clip is before it is sent for transcription.
+   Short clips keep the words arriving almost as fast as they are spoken. */
+const CLIP_MS = 1200;
 const WAVEFORM_BARS = 28;
 
 type SpeechRecognitionLike = {
