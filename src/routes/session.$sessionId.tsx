@@ -634,23 +634,37 @@ function SessionPage() {
   };
 
   /* ---------- learn mode ---------- */
+  /* bumped on every stop so queued speech from a closed panel never starts */
+  const speechTokenRef = useRef(0);
+  const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
+
   const stopAudio = () => {
+    speechTokenRef.current += 1;
+    speechQueueRef.current = Promise.resolve();
     pendingPlayRef.current = null;
-    audioRef.current?.pause();
+    const audio = audioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onpause = null;
+      audio.pause();
+    }
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
     }
     setSpeaking(false);
+    setVoiceLoading(false);
   };
 
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
     stopAudio();
+    const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
       const result = await speakFn({ data: { text: spoken.slice(0, 3500) } });
+      if (token !== speechTokenRef.current) return;
       if (!result.ok) {
         setVoiceNotice(result.message);
         return;
@@ -669,28 +683,40 @@ function SessionPage() {
       audioRef.current = audio;
       audio.src = url;
       audio.preload = "auto";
-      audio.onended = () => setSpeaking(false);
-      audio.onpause = () => setSpeaking(false);
 
-      const start = async () => {
-        setSpeaking(true);
-        await audio.play();
-        setVoiceNotice(null);
-      };
-
-      try {
-        await start();
-      } catch (error) {
-        // Autoplay policy: speech generated without a click cannot start on its
-        // own. Keep it ready and let the next tap anywhere release it.
-        if ((error as Error).name === "NotAllowedError") {
+      await new Promise<void>((resolve) => {
+        const finish = () => {
           setSpeaking(false);
-          pendingPlayRef.current = start;
-          setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
-        } else {
-          throw error;
-        }
-      }
+          resolve();
+        };
+        audio.onended = finish;
+        audio.onpause = finish;
+
+        const start = async () => {
+          if (token !== speechTokenRef.current) {
+            resolve();
+            return;
+          }
+          setSpeaking(true);
+          await audio.play();
+          setVoiceNotice(null);
+        };
+
+        void start().catch((error: Error) => {
+          // Autoplay policy: speech generated without a click cannot start on
+          // its own. Keep it ready and let the next tap anywhere release it.
+          if (error.name === "NotAllowedError") {
+            setSpeaking(false);
+            pendingPlayRef.current = start;
+            setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
+          } else {
+            console.error(error);
+            setSpeaking(false);
+            setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+          }
+          resolve();
+        });
+      });
     } catch (error) {
       console.error(error);
       setSpeaking(false);
@@ -699,6 +725,15 @@ function SessionPage() {
       setVoiceLoading(false);
     }
   };
+
+  /* speak one thing after another instead of cutting the previous line off */
+  const queueAudio = (text: string) => {
+    const token = speechTokenRef.current;
+    speechQueueRef.current = speechQueueRef.current
+      .then(() => (token === speechTokenRef.current ? playAudio(text) : undefined))
+      .catch(() => undefined);
+  };
+
 
   /* release any speech that autoplay blocked, on the student's next tap */
   useEffect(() => {
