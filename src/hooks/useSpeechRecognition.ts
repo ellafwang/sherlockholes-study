@@ -3,9 +3,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { transcribeSpeech, type TranscriptTurn } from "@/lib/voice.functions";
 
-/* How long each complete WAV clip is before it is sent for transcription.
-   Short clips keep the words arriving almost as fast as they are spoken. */
-const CLIP_MS = 1200;
+/* Clips are cut at natural pauses instead of on a fixed drumbeat: a very short
+   clip gives the transcriber half-words to guess from, which is what makes it
+   invent words. We check often, but only send once a sentence has finished. */
+const TICK_MS = 250;
+/** Never send a clip shorter than this — too little speech to transcribe safely. */
+const MIN_CLIP_SECONDS = 1.6;
+/** Send as soon as the speaker has been quiet this long (end of a sentence). */
+const SILENCE_SECONDS = 0.7;
+/** Send anyway after this much continuous speech, so long answers still stream. */
+const MAX_CLIP_SECONDS = 12;
+/** Loudness below this counts as silence rather than speech. */
+const VOICE_RMS = 0.012;
 const WAVEFORM_BARS = 28;
 
 type SpeechRecognitionLike = {
