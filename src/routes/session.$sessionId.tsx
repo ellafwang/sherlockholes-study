@@ -345,6 +345,10 @@ function SessionPage() {
   };
 
   const resumeTeaching = () => {
+    if (speakingLocked) {
+      toast.info("Feedback for this session is complete — the mic is closed.");
+      return;
+    }
     setRunning(true);
     if (speech.supported) speech.start();
   };
@@ -357,6 +361,10 @@ function SessionPage() {
     if (speech.listening) {
       await speech.stop();
       if (stage === "teach" && panel === "none") await flushRemaining();
+      return;
+    }
+    if (speakingLocked) {
+      toast.info("Feedback for this session is complete — the mic is closed.");
       return;
     }
     speech.start();
