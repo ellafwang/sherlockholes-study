@@ -96,7 +96,7 @@ You are listening live while the student teaches "${data.sessionTitle}".
 Judge ONLY the newest stretch of speech, in the context of what came before.
 Also note which single concept from their material it belongs to (use their own wording, or "General" if none fits),
 count how many worked examples or concrete instances they gave in this stretch,
-and write 0 to 2 questions to save for the Q&A afterwards, aimed at whatever they left thin or wrong.
+and write 0 to 2 questions to save for the Q&A afterwards, aimed only at concepts or steps that are actually defined in their notes.
 "note" is one short sentence, addressed to the student, that you keep to yourself for now.`,
       input: `Their notes:\n${data.notes || "(none)"}
 Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
@@ -163,11 +163,12 @@ ${GRADER}
 You asked the student a question about "${data.sessionTitle}" and they answered.
 Grade the answer, then respond in character:
 - green: satisfied. "reply" thanks them in one sentence. followUpQuestion must be null.
-- yellow: press for the missing detail. followUpQuestion asks them to elaborate on something they actually said.
+- yellow: press for the missing detail. followUpQuestion asks them to elaborate on something they actually said, but only if the detail is defined in their notes.
 - red: the answer is wrong. Do NOT reveal the correct answer. followUpQuestion is a related question that nudges them to
   reason toward it themselves, and missedConcept names the concept they got wrong.
 ${data.followUpDepth >= 2 ? "You have already followed up twice; set followUpQuestion to null and move on." : ""}
 Set missedConcept to null unless the verdict is red or a definition was clearly missing.
+Do not ask them to define or explain anything that is not defined in their notes; if the notes do not define it, simply move on.
 Judge the answer against what they already told you while teaching: praise consistency, and challenge contradictions.`,
       input: `Their notes:\n${data.notes || "(none)"}\n\nWhat they said while teaching you:\n${data.transcript || "(they said nothing yet)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
       schemaName: "answer_grade",
