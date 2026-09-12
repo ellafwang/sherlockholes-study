@@ -28,6 +28,8 @@ export function MaterialStage({
   const [concepts, setConcepts] = useState<string[]>(initialConcepts);
   const [draft, setDraft] = useState("");
   const [limit, setLimit] = useState(initialLimit || 180);
+  const [sources, setSources] = useState<string[]>([]);
+  const [reading, setReading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const addConcept = () => {
