@@ -607,6 +607,9 @@ function SessionPage() {
         exampleCount,
         narrative: result.narrative,
       };
+      /* warm the voice for the report before the database writes finish, so
+         playback starts the moment the panel is ready */
+      prefetchAudio(reportSpeechText(freshReport));
       feedbackSpokenRef.current = true;
       stopAudio();
       queueAudio(reportSpeechText(freshReport));
@@ -664,6 +667,32 @@ function SessionPage() {
     stopPlayback();
   };
 
+  /* cache of in-flight/generated audio keyed by spoken text, so anything
+     prefetched (next question, feedback report) plays instantly instead of
+     waiting on a fresh voice-generation round trip after it pops up */
+  const audioCacheRef = useRef(new Map<string, Promise<{ ok: boolean; audio?: string; message?: string }>>());
+
+  const requestAudio = (spoken: string) => {
+    const key = spoken.slice(0, 3500);
+    let pending = audioCacheRef.current.get(key);
+    if (!pending) {
+      pending = speakFn({ data: { text: key } });
+      audioCacheRef.current.set(key, pending);
+      if (audioCacheRef.current.size > 20) {
+        const oldest = audioCacheRef.current.keys().next().value;
+        if (oldest) audioCacheRef.current.delete(oldest);
+      }
+    }
+    return pending;
+  };
+
+  /* warm the cache so playback starts the moment the line is needed */
+  const prefetchAudio = (text: string) => {
+    const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
+    if (!spoken) return;
+    void requestAudio(spoken).catch(() => undefined);
+  };
+
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
@@ -671,15 +700,21 @@ function SessionPage() {
     const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
-      const result = await speakFn({ data: { text: spoken.slice(0, 3500) } });
+      const result = await requestAudio(spoken);
       if (token !== speechTokenRef.current) return;
       if (!result.ok) {
-        setVoiceNotice(result.message);
+        audioCacheRef.current.delete(spoken.slice(0, 3500));
+        setVoiceNotice(result.message ?? "Sherlock's voice didn't come through.");
         return;
       }
 
       // Decode base64 into a real audio blob: long data: URIs are rejected or
       // silently dropped by some browsers, a blob URL always plays.
+      if (!result.audio) {
+        audioCacheRef.current.delete(spoken.slice(0, 3500));
+        setVoiceNotice("Sherlock's voice didn't come through.");
+        return;
+      }
       const binary = atob(result.audio);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -773,8 +808,20 @@ function SessionPage() {
   useEffect(() => {
     if (panel !== "qa" || !activeQuestion) return;
     speakOnce(`q:${activeQuestion.questionId ?? activeQuestion.question}`, activeQuestion.question);
+    /* warm the voice for whatever is coming next so it starts instantly when
+       it pops up instead of lagging behind the box */
+    (followUp ? pendingQuestions : pendingQuestions.slice(1)).slice(0, 2).forEach((question) =>
+      prefetchAudio(question.question),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, activeQuestion?.question, activeQuestion?.questionId]);
+
+  /* the moment questions exist (seeded during teaching), warm the first one so
+     opening Q&A doesn't wait on voice generation */
+  useEffect(() => {
+    pendingQuestions.slice(0, 1).forEach((question) => prefetchAudio(question.question));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestions[0]?.id]);
 
   /* the feedback summary is read aloud the moment the feedback tab opens, and
      re-read on each fresh visit to it */
