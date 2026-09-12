@@ -466,8 +466,8 @@ function SessionPage() {
           sessionTitle: session.data.title,
           notes,
           concepts,
-          transcript: rows.map((row) => row.transcript).join(" "),
-          qaLog: turns
+          transcript: (rows ?? []).map((row) => row.transcript).join(" "),
+          qaLog: (turns ?? [])
             .map((turn) => `${turn.role === "user" ? "Student" : "Sherlock"}: ${turn.content}`)
             .join("\n"),
           openQuestions: stillOpen,
