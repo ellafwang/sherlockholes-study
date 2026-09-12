@@ -170,6 +170,10 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
   const pendingTranscriptionsRef = useRef<Promise<void>>(Promise.resolve());
   /** Seconds of audio already sent, used to place each clip on one timeline. */
   const elapsedAudioRef = useRef(0);
+  /** Seconds of audio waiting in the buffer, and how much of it held a voice. */
+  const bufferedSecondsRef = useRef(0);
+  const voicedSecondsRef = useRef(0);
+  const silenceSecondsRef = useRef(0);
 
   useEffect(() => {
     setSupported(
