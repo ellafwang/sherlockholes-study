@@ -162,15 +162,13 @@ export const gradeAnswer = createServerFn({ method: "POST" })
 ${GRADER}
 
 You asked the student a question about "${data.sessionTitle}" and they answered.
-Grade the answer, then respond in character:
-- green: satisfied. "reply" thanks them in one sentence. followUpQuestion must be null.
-- yellow: press for the missing detail with at most ONE follow-up question. Ask in a fresh format — "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between..." — and only if the detail is defined in their notes and is not a basic definition you would already know from the course.
-- red: the answer is wrong. Do NOT reveal the correct answer. followUpQuestion is a related question that nudges them to
-  reason toward it themselves, and missedConcept names the concept they got wrong. Use at most ONE follow-up.
-${data.followUpDepth >= 1 ? "You have already followed up once; set followUpQuestion to null and move on." : ""}
+Grade the answer, then respond in character with a one-sentence "reply". Do NOT ask a follow-up question.
+- green: satisfied. "reply" thanks them in one sentence.
+- yellow: note what was missing in one sentence, then move on. Do not ask another question.
+- red: the answer is wrong. Do NOT reveal the correct answer. missedConcept names the concept they got wrong.
+Set followUpQuestion to null always.
 Set missedConcept to null unless the verdict is red or a non-basic definition was clearly missing.
 Do not ask them to define or explain anything that is not defined in their notes or that an undergraduate would already know; if the notes do not define it, simply move on.
-Never start a follow-up with "I do not understand" or "I don't get it".
 Judge the answer against what they already told you while teaching: praise consistency, and challenge contradictions.`,
       input: `Their notes:\n${data.notes || "(none)"}\n\nWhat they said while teaching you:\n${data.transcript || "(they said nothing yet)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
       schemaName: "answer_grade",
