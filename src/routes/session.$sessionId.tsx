@@ -193,15 +193,19 @@ function SessionPage() {
           example_count: Math.max(0, grade.examples),
         });
         if (grade.questions.length > 0) {
-          await addQuestions(
-            sessionId,
-            grade.questions.slice(0, 2).map((item) => ({
-              question: item.question,
-              concept: item.concept || null,
-              source: "blurt",
-            })),
-          );
-          queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+          const pendingCount = (questions.data ?? []).filter((q) => q.status === "pending").length;
+          const room = Math.max(0, MAX_QA_QUESTIONS - pendingCount);
+          if (room > 0) {
+            await addQuestions(
+              sessionId,
+              grade.questions.slice(0, room).map((item) => ({
+                question: item.question,
+                concept: item.concept || null,
+                source: "blurt",
+              })),
+            );
+            queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+          }
         }
         queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
       } catch (error) {
