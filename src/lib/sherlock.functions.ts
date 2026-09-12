@@ -1,0 +1,266 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+
+export type Verdict = "neutral" | "green" | "yellow" | "red";
+
+const materialSchema = z.object({
+  sessionTitle: z.string(),
+  notes: z.string(),
+  concepts: z.array(z.string()),
+});
+
+const PERSONA = `You are Sherlock Holes: an inquisitive, slightly confused STUDENT with no prior context on the topic.
+You are being taught by the user. You are curious, polite and relentless about definitions.
+When the user uses a term without defining it, or explains it poorly, you ask exactly the kind of question a lost student asks:
+"What is it?", "How does it work?", or "What happens if <a specific special case> occurs?".
+You never lecture, never supply the answer, and never flatter. Keep every question to one short sentence.`;
+
+const GRADER = `You judge how completely a student is explaining their own material.
+verdict rules, applied strictly:
+- "green": accurate and elaborative, every definition and condition present for what they just covered.
+- "yellow": vague, thin on cases, or a definition/condition is missing.
+- "red": something stated is factually wrong for the concept, definition or condition.
+- "neutral": they are mid-sentence, setting up, or nothing substantive has been asserted yet.`;
+
+/* ---------- seed questions from the material ---------- */
+
+export const seedQuestions = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => materialSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { generateJson } = await import("./ai.server");
+    const result = await generateJson<{ questions: { question: string; concept: string }[] }>({
+      instructions: `${PERSONA}
+You have just been handed the student's material for the topic "${data.sessionTitle}".
+Write 5 to 7 questions a confused student would need answered to truly understand this material.
+Cover definitions, conditions, edge cases and "why" questions. One sentence each.`,
+      input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
+        data.concepts.join("\n") || "(none listed)"
+      }`,
+      schemaName: "seed_questions",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["questions"],
+        properties: {
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["question", "concept"],
+              properties: {
+                question: { type: "string" },
+                concept: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    });
+    return result.questions.slice(0, 7);
+  });
+
+/* ---------- live grading during the blurt ---------- */
+
+const blurtSchema = z.object({
+  sessionTitle: z.string(),
+  notes: z.string(),
+  concepts: z.array(z.string()),
+  transcript: z.string(),
+  earlier: z.string(),
+});
+
+export type BlurtGrade = {
+  verdict: Verdict;
+  concept: string;
+  note: string;
+  examples: number;
+  questions: { question: string; concept: string }[];
+};
+
+export const gradeBlurt = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => blurtSchema.parse(input))
+  .handler(async ({ data }): Promise<BlurtGrade> => {
+    const { generateJson } = await import("./ai.server");
+    return generateJson<BlurtGrade>({
+      instructions: `${PERSONA}
+
+${GRADER}
+
+You are listening live while the student teaches "${data.sessionTitle}".
+Judge ONLY the newest stretch of speech, in the context of what came before.
+Also note which single concept from their material it belongs to (use their own wording, or "General" if none fits),
+count how many worked examples or concrete instances they gave in this stretch,
+and write 0 to 2 questions to save for the Q&A afterwards, aimed at whatever they left thin or wrong.
+"note" is one short sentence, addressed to the student, that you keep to yourself for now.`,
+      input: `Their notes:\n${data.notes || "(none)"}
+Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
+
+Earlier in this explanation:\n${data.earlier.slice(-2500) || "(nothing yet)"}
+
+Newest stretch of speech:\n${data.transcript}`,
+      schemaName: "blurt_grade",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["verdict", "concept", "note", "examples", "questions"],
+        properties: {
+          verdict: { type: "string", enum: ["neutral", "green", "yellow", "red"] },
+          concept: { type: "string" },
+          note: { type: "string" },
+          examples: { type: "integer" },
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["question", "concept"],
+              properties: {
+                question: { type: "string" },
+                concept: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+/* ---------- Mid-Session Q&A grading ---------- */
+
+const answerSchema = z.object({
+  sessionTitle: z.string(),
+  notes: z.string(),
+  question: z.string(),
+  answer: z.string(),
+  followUpDepth: z.number(),
+});
+
+export type AnswerGrade = {
+  verdict: Verdict;
+  reply: string;
+  followUpQuestion: string | null;
+  missedConcept: string | null;
+};
+
+export const gradeAnswer = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => answerSchema.parse(input))
+  .handler(async ({ data }): Promise<AnswerGrade> => {
+    const { generateJson } = await import("./ai.server");
+    return generateJson<AnswerGrade>({
+      instructions: `${PERSONA}
+
+${GRADER}
+
+You asked the student a question about "${data.sessionTitle}" and they answered.
+Grade the answer, then respond in character:
+- green: satisfied. "reply" thanks them in one sentence. followUpQuestion must be null.
+- yellow: press for the missing detail. followUpQuestion asks them to elaborate on something they actually said.
+- red: the answer is wrong. Do NOT reveal the correct answer. followUpQuestion is a related question that nudges them to
+  reason toward it themselves, and missedConcept names the concept they got wrong.
+${data.followUpDepth >= 2 ? "You have already followed up twice; set followUpQuestion to null and move on." : ""}
+Set missedConcept to null unless the verdict is red or a definition was clearly missing.`,
+      input: `Their notes:\n${data.notes || "(none)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
+      schemaName: "answer_grade",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["verdict", "reply", "followUpQuestion", "missedConcept"],
+        properties: {
+          verdict: { type: "string", enum: ["neutral", "green", "yellow", "red"] },
+          reply: { type: "string" },
+          followUpQuestion: { type: ["string", "null"] },
+          missedConcept: { type: ["string", "null"] },
+        },
+      },
+    });
+  });
+
+/* ---------- Session feedback report ---------- */
+
+const summarySchema = z.object({
+  sessionTitle: z.string(),
+  notes: z.string(),
+  concepts: z.array(z.string()),
+  transcript: z.string(),
+  qaLog: z.string(),
+  openQuestions: z.array(z.string()),
+});
+
+export type SummaryReport = {
+  covered: string[];
+  answeredWell: string[];
+  gaps: string[];
+  narrative: string;
+};
+
+export const buildReport = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => summarySchema.parse(input))
+  .handler(async ({ data }): Promise<SummaryReport> => {
+    const { generateJson } = await import("./ai.server");
+    return generateJson<SummaryReport>({
+      instructions: `You are writing the case notes for a Feynman-technique study session on "${data.sessionTitle}".
+"covered" lists the concepts the student genuinely explained.
+"answeredWell" lists the questions they answered correctly and with elaboration during the Q&A.
+"gaps" lists what they missed, misunderstood or left vague — each as a short, specific phrase the student can study next.
+"narrative" is 2 to 4 sentences of plain, honest feedback addressed to the student.
+Only reference material the student actually supplied or said.`,
+      input: `Notes:\n${data.notes || "(none)"}
+Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
+
+Full spoken explanation:\n${data.transcript.slice(0, 12000) || "(nothing recorded)"}
+
+Q&A log:\n${data.qaLog.slice(0, 8000) || "(no Q&A)"}
+
+Questions still unanswered:\n${data.openQuestions.join("\n") || "(none)"}`,
+      schemaName: "session_report",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["covered", "answeredWell", "gaps", "narrative"],
+        properties: {
+          covered: { type: "array", items: { type: "string" } },
+          answeredWell: { type: "array", items: { type: "string" } },
+          gaps: { type: "array", items: { type: "string" } },
+          narrative: { type: "string" },
+        },
+      },
+      effort: "medium",
+    });
+  });
+
+/* ---------- Learn from Sherlock ---------- */
+
+const learnSchema = z.object({
+  sessionTitle: z.string(),
+  notes: z.string(),
+  focus: z.array(z.string()),
+  history: z.array(z.object({ role: z.string(), content: z.string() })),
+  message: z.string(),
+});
+
+export const learnReply = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => learnSchema.parse(input))
+  .handler(async ({ data }): Promise<{ reply: string }> => {
+    const { generateProse } = await import("./ai.server");
+    const reply = await generateProse({
+      instructions: `You are Sherlock Holes in teaching mode: a warm, exacting tutor for the topic "${data.sessionTitle}".
+Explain clearly and concretely, in short paragraphs, building from the student's own notes wherever possible.
+Every reply ends with one practice question that checks the thing you just explained.
+Never use markdown symbols, headings, asterisks or bullet characters — this text is read aloud.
+Keep replies under 150 words.`,
+      input: `The student's notes:\n${data.notes || "(none)"}
+
+Concepts they still need to close:\n${data.focus.join("\n") || "(none flagged)"}
+
+Conversation so far:
+${data.history
+  .slice(-12)
+  .map((m) => `${m.role === "user" ? "Student" : "Sherlock"}: ${m.content}`)
+  .join("\n")}
+
+Student: ${data.message}`,
+      effort: "low",
+    });
+    return { reply };
+  });
