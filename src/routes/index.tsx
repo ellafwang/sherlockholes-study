@@ -87,7 +87,7 @@ function Dashboard() {
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Sherlock Holes</h1>
           </div>
           <p className="mt-3 max-w-xl text-muted-foreground">
-            Teach a topic out loud to a curious, easily-confused detective. Wherever he gets lost is
+            Teach a topic out loud to Sherlock. Wherever he gets lost is
             a hole in what you know — and that's exactly where you'll study next.
           </p>
         </div>
