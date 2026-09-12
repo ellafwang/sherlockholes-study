@@ -57,24 +57,25 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
             : "webm";
     const form = new FormData();
     form.append("file", new Blob([bytes], { type: data.mimeType }), `blurt.${extension}`);
-    form.append("model_id", "scribe_v2");
-    form.append("language_code", "en");
-    form.append("tag_audio_events", "false");
-    form.append("diarize", "false");
+    // Highest-accuracy transcription model; force English so output never
+    // drifts into another language.
+    form.append("model", "openai/gpt-4o-transcribe");
+    form.append("language", "en");
+    form.append("response_format", "json");
 
-    const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
       method: "POST",
-      headers: { "xi-api-key": apiKey },
+      headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
     });
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      console.error(`ElevenLabs STT error [${response.status}]: ${detail}`);
+      console.error(`Transcription error [${response.status}]: ${detail}`);
       const providerMessage = (() => {
         try {
-          const parsed = JSON.parse(detail) as { detail?: { message?: string }; message?: string };
-          return parsed.detail?.message ?? parsed.message;
+          const parsed = JSON.parse(detail) as { error?: { message?: string }; message?: string };
+          return parsed.error?.message ?? parsed.message;
         } catch {
           return undefined;
         }
