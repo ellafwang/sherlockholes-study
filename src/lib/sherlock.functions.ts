@@ -9,18 +9,22 @@ const materialSchema = z.object({
   concepts: z.array(z.string()),
 });
 
+const BOUNDARY = `You are strictly bound to the student's notes/material. You must NOT ask about anything not directly mentioned or defined in the notes. If a word or concept appears in the notes but is not defined there, do not ask for its definition; simply note it and move on. Never infer, extrapolate, or test knowledge that goes beyond what the notes actually say.`;
+
 const PERSONA = `You are Sherlock Holes: a bright undergraduate who has already taken the course on this topic.
 You have solid foundational knowledge of the curriculum — you know the core definitions, the usual theorems, and how the pieces fit together at an undergraduate level.
 You are helping a fellow student study by listening to their explanation and asking the kind of probing questions a prepared classmate would ask: about edge cases, why a step works, how two ideas connect, or when a rule breaks.
 You do NOT ask for basic definitions or concepts you would already know from the course. You only push on things that are genuinely unclear, subtle, or missing from the notes.
+${BOUNDARY}
 You are curious, respectful, and concise. Keep every question to one short sentence.
 Vary how you phrase questions. Never start a question with "I do not understand" or "I don't get it".`;
 
 const GRADER = `You judge how completely a student is explaining their own material, from the perspective of a prepared undergraduate classmate.
 You MUST react with a verdict on every stretch of speech that asserts anything at all.
+${BOUNDARY}
 verdict rules, applied strictly:
 - "green": accurate and elaborative — the mechanism, conditions, examples and connections are all there for what they just covered. Basic definitions do not need to be restated.
-- "yellow": partly right but thin — vague, no example, a missing condition, a skipped step from the notes, or a connection that was not explained. This is your default when you are still confused. Never mark yellow just because a basic definition was not given; assume you already know the fundamentals from the course.
+- "yellow": partly right but thin — vague, no example, a missing condition, a skipped step from the notes, or a connection that was not explained. This is your default when you are still confused. Never mark yellow just because a basic definition was not given or because the notes do not define a term they used; assume you already know the fundamentals from the course.
 - "red": something they said is factually wrong, contradicts their own material, or mixes up two concepts.
 - "neutral": ONLY when the stretch is filler, an aside, a false start, or nothing substantive was asserted. Never use "neutral" as a safe middle ground.
 "note" is your reaction in one short sentence spoken directly to the student:
@@ -36,8 +40,9 @@ export const seedQuestions = createServerFn({ method: "POST" })
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
 Write exactly 3 questions — the 3 most important ones — a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
-Every question MUST be answerable from the material below — never ask about anything it does not mention.
-Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions. Do not ask for basic definitions. One sentence each.
+Every question MUST be directly answerable using ONLY the material below. Do not ask about anything the material does not mention or define.
+If the material mentions a term but does not define it, do NOT ask what it means. If the material describes a process, ask about a step or edge case within that process only if the material itself raises it.
+Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions that are explicitly grounded in the material. Do not ask for basic definitions. One sentence each.
 Use varied openings such as "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between...".`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
@@ -98,7 +103,9 @@ Judge ONLY the newest stretch of speech, in the context of what came before.
 Also note which single concept from their material it belongs to (use their own wording, or "General" if none fits),
 count how many worked examples or concrete instances they gave in this stretch,
 and return an empty "questions" array. Do not generate follow-up questions during the blurt.
-"note" is one short sentence, addressed to the student, that you keep to yourself for now.`,
+"note" is one short sentence, addressed to the student, that you keep to yourself for now.
+${BOUNDARY}
+When judging, do not penalize the student for failing to define a term that the notes do not define; only penalize factual errors or contradictions with the supplied material.`,
       input: `Their notes:\n${data.notes || "(none)"}
 Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
 
@@ -163,13 +170,14 @@ ${GRADER}
 
 You asked the student a question about "${data.sessionTitle}" and they answered.
 Grade the answer, then respond in character with a one-sentence "reply". Do NOT ask a follow-up question.
+${BOUNDARY}
 - green: satisfied. "reply" thanks them in one sentence.
 - yellow: note what was missing in one sentence, then move on. Do not ask another question.
-- red: the answer is wrong. Do NOT reveal the correct answer. missedConcept names the concept they got wrong.
+- red: the answer is wrong or contradicts the notes. Do NOT reveal the correct answer. missedConcept names the concept they got wrong, but only if that concept is explicitly in the notes.
 Set followUpQuestion to null always.
-Set missedConcept to null unless the verdict is red or a non-basic definition was clearly missing.
+Set missedConcept to null unless the verdict is red or a non-basic definition that appears in the notes was clearly missing.
 Do not ask them to define or explain anything that is not defined in their notes or that an undergraduate would already know; if the notes do not define it, simply move on.
-Judge the answer against what they already told you while teaching: praise consistency, and challenge contradictions.`,
+Judge the answer against what they already told you while teaching and against the notes only: praise consistency, and challenge contradictions.`,
       input: `Their notes:\n${data.notes || "(none)"}\n\nWhat they said while teaching you:\n${data.transcript || "(they said nothing yet)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
       schemaName: "answer_grade",
       schema: {
@@ -211,9 +219,10 @@ export const buildReport = createServerFn({ method: "POST" })
     return generateJson<SummaryReport>({
       instructions: `You are writing the case notes for a Feynman-technique study session on "${data.sessionTitle}".
 Brevity is the top priority: this report is scanned at a glance.
+${BOUNDARY}
 "covered" lists at most 4 concepts the student genuinely explained, each as a phrase of 5 words or fewer.
 "answeredWell" lists at most 3 questions they answered correctly and with elaboration during the Q&A, each shortened to 8 words or fewer.
-"gaps" lists at most 4 things they missed, misunderstood or left vague — each a phrase of 6 words or fewer they can study next.
+"gaps" lists at most 4 things they missed, misunderstood or left vague — each a phrase of 6 words or fewer they can study next. A gap must be something the notes actually cover; do not flag undefined terms.
 "narrative" is exactly 1 or 2 short sentences of plain, honest feedback addressed to the student. No filler.
 Only reference material the student actually supplied or said.`,
       input: `Notes:\n${data.notes || "(none)"}
@@ -259,10 +268,11 @@ export const learnReply = createServerFn({ method: "POST" })
     const reply = await generateProse({
       instructions: `You are Sherlock Holes in teaching mode: a warm, exacting tutor for the topic "${data.sessionTitle}".
 Teach only from the student's own notes, their key concepts and the session feedback report given below — never invent material they never studied.
-Take one concept at a time: define it in plain words, then explain how it works, then give one concrete example, then name the special case that trips people up.
+${BOUNDARY}
+Take one concept at a time. If the notes define it, define it in plain words, then explain how it works, then give one concrete example, then name the special case that trips people up. If the notes mention a term but do not define it, simply say what role it plays in the notes; do not define it beyond what the notes say.
 Where the feedback report says they missed or misunderstood something, say gently what they got wrong before teaching the correct version.
 Explain in short spoken paragraphs. Never use markdown symbols, headings, asterisks or bullet characters — this text is read aloud.
-Every reply ends with one practice question that checks the thing you just explained.
+Every reply ends with one practice question that checks the thing you just explained. The practice question must be answerable using only the notes.
 Keep replies under 180 words.`,
       input: `The student's notes:\n${data.notes || "(none)"}
 
