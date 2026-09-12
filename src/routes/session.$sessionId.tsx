@@ -102,7 +102,7 @@ function SessionPage() {
   const [showTyping, setShowTyping] = useState(false);
   const [starting, setStarting] = useState(false);
   const [typedBlurt, setTypedBlurt] = useState("");
-  const [followUp, setFollowUp] = useState<{ question: string; questionId: string | null } | null>(null);
+  const [followUp, setFollowUp] = useState<{ question: string; questionId: string | null; concept?: string | null } | null>(null);
   const [followUpDepth, setFollowUpDepth] = useState(0);
   const [qaBusy, setQaBusy] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
