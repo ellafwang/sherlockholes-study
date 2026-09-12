@@ -93,6 +93,7 @@ function SessionPage() {
   });
 
   const [verdict, setVerdict] = useState<Verdict>("neutral");
+  const [reaction, setReaction] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>("none");
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
