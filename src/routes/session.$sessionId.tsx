@@ -364,7 +364,7 @@ function SessionPage() {
     [questions.data],
   );
   const activeQuestion = followUp ?? (pendingQuestions[0]
-    ? { question: pendingQuestions[0].question, questionId: pendingQuestions[0].id }
+    ? { question: pendingQuestions[0].question, questionId: pendingQuestions[0].id as string | null, concept: pendingQuestions[0].concept }
     : null);
 
   const openQa = async () => {
