@@ -607,10 +607,9 @@ function SessionPage() {
         exampleCount,
         narrative: result.narrative,
       };
-      speakOnce(
-        `report:${sessionId}:${result.narrative.slice(0, 40)}`,
-        reportSpeechText(freshReport),
-      );
+      feedbackSpokenRef.current = true;
+      stopAudio();
+      queueAudio(reportSpeechText(freshReport));
 
       const existing = new Set(
         ((await listLearnTopics(sessionId)) ?? []).map((topic) =>
@@ -762,6 +761,7 @@ function SessionPage() {
 
   /* ---------- Sherlock speaks every question and the feedback report ---------- */
   const spokenOnceRef = useRef<Set<string>>(new Set());
+  const feedbackSpokenRef = useRef(false);
   const speakOnce = (key: string, text: string) => {
     if (!text.trim()) return;
     if (spokenOnceRef.current.has(key)) return;
@@ -776,13 +776,17 @@ function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, activeQuestion?.question, activeQuestion?.questionId]);
 
-  /* the feedback summary is read aloud as soon as the report is ready */
+  /* the feedback summary is read aloud the moment the feedback tab opens, and
+     re-read on each fresh visit to it */
   useEffect(() => {
-    if (panel !== "feedback" || reportBusy || !report) return;
-    speakOnce(
-      `report:${sessionId}:${report.narrative.slice(0, 40)}`,
-      reportSpeechText(report),
-    );
+    if (panel !== "feedback") {
+      feedbackSpokenRef.current = false;
+      return;
+    }
+    if (reportBusy || !report || feedbackSpokenRef.current) return;
+    feedbackSpokenRef.current = true;
+    stopAudio();
+    queueAudio(reportSpeechText(report));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, reportBusy, report]);
 
@@ -834,6 +838,10 @@ function SessionPage() {
 
   const openLearn = async () => {
     setPanel("learn");
+    // Sherlock reads the feedback report aloud when the lesson opens, then the
+    // first lesson follows it instead of cutting it off.
+    stopAudio();
+    if (report) queueAudio(reportSpeechText(report));
     if (stage !== "learn") {
       await updateSession(sessionId, { stage: "learn" });
       queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
@@ -872,7 +880,7 @@ function SessionPage() {
       await addLearnMessage(sessionId, "sherlock", result.reply);
       queryClient.invalidateQueries({ queryKey: ["learn-messages", sessionId] });
       setVerdict("neutral");
-      void playAudio(result.reply);
+      queueAudio(result.reply);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -1251,9 +1259,15 @@ function SessionPage() {
             <FeedbackPanel
               report={report}
               loading={reportBusy}
-              onBack={() => setPanel("none")}
+              onBack={() => {
+                stopAudio();
+                setPanel("none");
+              }}
               onLearn={openLearn}
-              onNewTeach={teachAgain}
+              onNewTeach={() => {
+                stopAudio();
+                void teachAgain();
+              }}
             />
           )}
 
