@@ -32,18 +32,38 @@ green = say what clicked, yellow = name the one thing you still don't get, red =
 
 /* ---------- seed questions from the material ---------- */
 
+/** Loose containment check: does this quote really appear in the notes? */
+function quotedFromNotes(notes: string, quote: string) {
+  const flatten = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const haystack = flatten(notes);
+  const needle = flatten(quote);
+  if (needle.length < 12) return false;
+  if (haystack.includes(needle)) return true;
+  // Allow a trimmed quote: most of its words must appear as a run in the notes.
+  const words = needle.split(" ");
+  if (words.length < 4) return false;
+  const window = words.slice(0, Math.max(4, Math.floor(words.length * 0.6))).join(" ");
+  return haystack.includes(window);
+}
+
 export const seedQuestions = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => materialSchema.parse(input))
   .handler(async ({ data }) => {
     const { generateJson } = await import("./ai.server");
-    const result = await generateJson<{ questions: { question: string; concept: string }[] }>({
+    const result = await generateJson<{
+      questions: { question: string; concept: string; evidence: string }[];
+    }>({
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
-Write exactly 3 questions — the 3 most important ones — a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
-Every question MUST be directly answerable using ONLY the material below. Do not ask about anything the material does not mention or define.
-If the material mentions a term but does not define it, do NOT ask what it means. If the material describes a process, ask about a step or edge case within that process only if the material itself raises it.
-Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions that are explicitly grounded in the material. Do not ask for basic definitions. One sentence each.
-Use varied openings such as "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between...".`,
+Write at most 3 questions — the most important ones — a well-prepared undergraduate classmate would ask about THIS material.
+Hard rules, no exceptions:
+- Every question must be fully answerable by reading the material alone. The complete answer must already be written in the material.
+- Never ask about implications, applications, extensions, comparisons, edge cases, proofs or consequences that the material does not itself state.
+- Never ask a student to speculate, generalise, or go one step beyond the text.
+- Never ask for the meaning of a term the material does not define.
+- If the material only supports one or two such questions, return only one or two. Fewer good questions is correct; inventing a deeper question is a failure.
+For each question, "evidence" MUST be a sentence or clause copied word-for-word from the material that contains the answer. If you cannot copy such a sentence, drop the question.
+One sentence per question. Vary the openings ("Why does...", "Walk me through...", "What does the material say about...").`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
       }`,
