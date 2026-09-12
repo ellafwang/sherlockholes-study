@@ -464,6 +464,22 @@ function SessionPage() {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
     }
+    // "I don't know" means this must be addressed in Learn from Sherlock:
+    // record the question's topic so it lands in the feedback lesson plan.
+    const topic = (activeQuestion.concept?.trim() || activeQuestion.question).trim();
+    if (topic) {
+      const existing = new Set(
+        ((await listLearnTopics(sessionId)) ?? []).map((row) =>
+          row.topic.trim().toLowerCase(),
+        ),
+      );
+      if (!existing.has(topic.toLowerCase())) {
+        await addLearnTopics(sessionId, [
+          { topic, detail: activeQuestion.question, origin: "skipped" },
+        ]);
+        queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
+      }
+    }
     speech.reset();
   };
 
