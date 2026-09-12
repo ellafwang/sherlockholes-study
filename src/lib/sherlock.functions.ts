@@ -78,17 +78,24 @@ One sentence per question. Vary the openings ("Why does...", "Walk me through...
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["question", "concept"],
+              required: ["question", "concept", "evidence"],
               properties: {
                 question: { type: "string" },
                 concept: { type: "string" },
+                evidence: { type: "string" },
               },
             },
           },
         },
       },
     });
-    return result.questions.slice(0, 3);
+
+    // Truly enforce grounding: keep only questions whose answer is quoted from the notes.
+    const grounded = result.questions.filter((item) =>
+      quotedFromNotes(data.notes, item.evidence ?? ""),
+    );
+    const chosen = grounded.length > 0 ? grounded : result.questions.slice(0, 1);
+    return chosen.slice(0, 3).map(({ question, concept }) => ({ question, concept }));
   });
 
 /* ---------- live grading during the blurt ---------- */
