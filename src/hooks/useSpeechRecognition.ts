@@ -400,7 +400,16 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
           pcmRef.current.push(samples);
           let energy = 0;
           for (let i = 0; i < samples.length; i += 1) energy += (samples[i] ?? 0) ** 2;
-          const level = Math.min(1, Math.sqrt(energy / samples.length) * 4);
+          const rms = Math.sqrt(energy / samples.length);
+          const chunkSeconds = samples.length / context.sampleRate;
+          bufferedSecondsRef.current += chunkSeconds;
+          if (rms >= VOICE_RMS) {
+            voicedSecondsRef.current += chunkSeconds;
+            silenceSecondsRef.current = 0;
+          } else {
+            silenceSecondsRef.current += chunkSeconds;
+          }
+          const level = Math.min(1, rms * 4);
           setLevels((current) => [...current.slice(1), level]);
           if (level > 0.048) markSpeaking();
         };
