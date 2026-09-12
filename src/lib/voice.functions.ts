@@ -14,11 +14,14 @@ export type ListenResult =
   | { ok: true; text: string }
   | { ok: false; reason: "not_connected" | "failed"; message: string };
 
-/** Transcribes a short clip of the student's voice with ElevenLabs Scribe. */
+/**
+ * Transcribes a short clip of the student's voice with the highest-accuracy
+ * English transcription model available, locked to English output.
+ */
 export const transcribeSpeech = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listenSchema.parse(input))
   .handler(async ({ data }): Promise<ListenResult> => {
-    const apiKey = process.env["ELEVENLABS_API_KEY"];
+    const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) {
       return {
         ok: false,
