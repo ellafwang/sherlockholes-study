@@ -162,8 +162,9 @@ Grade the answer, then respond in character:
 - red: the answer is wrong. Do NOT reveal the correct answer. followUpQuestion is a related question that nudges them to
   reason toward it themselves, and missedConcept names the concept they got wrong.
 ${data.followUpDepth >= 2 ? "You have already followed up twice; set followUpQuestion to null and move on." : ""}
-Set missedConcept to null unless the verdict is red or a definition was clearly missing.`,
-      input: `Their notes:\n${data.notes || "(none)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
+Set missedConcept to null unless the verdict is red or a definition was clearly missing.
+Judge the answer against what they already told you while teaching: praise consistency, and challenge contradictions.`,
+      input: `Their notes:\n${data.notes || "(none)"}\n\nWhat they said while teaching you:\n${data.transcript || "(they said nothing yet)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
       schemaName: "answer_grade",
       schema: {
         type: "object",
