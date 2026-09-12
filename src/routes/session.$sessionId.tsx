@@ -232,10 +232,17 @@ function SessionPage() {
     gradeChunkRef.current = gradeChunk;
   }, [gradeChunk]);
 
+  // One judgement at a time: words stay banked until the current one comes back.
+  const gradingRef = useRef(false);
+  useEffect(() => {
+    gradingRef.current = grading;
+  }, [grading]);
+
   const drainSpeech = speech.drain;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
+      if (gradingRef.current) return;
       const chunk = drainSpeech();
       if (!chunk) return;
       const at = lastGradeAt.current;
