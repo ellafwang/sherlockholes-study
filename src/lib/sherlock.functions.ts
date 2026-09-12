@@ -219,9 +219,10 @@ export const buildReport = createServerFn({ method: "POST" })
     return generateJson<SummaryReport>({
       instructions: `You are writing the case notes for a Feynman-technique study session on "${data.sessionTitle}".
 Brevity is the top priority: this report is scanned at a glance.
+${BOUNDARY}
 "covered" lists at most 4 concepts the student genuinely explained, each as a phrase of 5 words or fewer.
 "answeredWell" lists at most 3 questions they answered correctly and with elaboration during the Q&A, each shortened to 8 words or fewer.
-"gaps" lists at most 4 things they missed, misunderstood or left vague — each a phrase of 6 words or fewer they can study next.
+"gaps" lists at most 4 things they missed, misunderstood or left vague — each a phrase of 6 words or fewer they can study next. A gap must be something the notes actually cover; do not flag undefined terms.
 "narrative" is exactly 1 or 2 short sentences of plain, honest feedback addressed to the student. No filler.
 Only reference material the student actually supplied or said.`,
       input: `Notes:\n${data.notes || "(none)"}
