@@ -799,10 +799,13 @@ function SessionPage() {
                 role: row.role,
                 content: row.content,
               }))}
-              focus={(learnTopics.data ?? []).map((topic) => topic.topic)}
+              focus={learnPlan}
+              covered={taughtTopics}
+              nextTopic={nextLearnTopic}
               busy={learnBusy}
               voiceNotice={voiceNotice}
               onSend={sendLearn}
+              onTeachTopic={teachTopic}
               onReplay={playAudio}
               onBack={() => setPanel("feedback")}
             />
