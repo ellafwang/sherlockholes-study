@@ -128,7 +128,7 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     }
 
     const body = (await response.json()) as { text?: string };
-    const text = (body.text ?? "").trim();
+    const text = dropInventedText((body.text ?? "").trim());
     // Gemini returns a plain transcript without diarization or word timings:
     // wrap it in a single turn so the transcript view still renders.
     const turns: TranscriptTurn[] = text ? [{ speaker: "speaker_0", start: 0, end: 0, text }] : [];
