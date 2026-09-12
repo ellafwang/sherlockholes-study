@@ -53,6 +53,8 @@ export const Route = createFileRoute("/session/$sessionId")({
         property: "og:description",
         content: "A live teaching session: blurt, mid-session Q&A, feedback report and tutoring.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   ssr: false,

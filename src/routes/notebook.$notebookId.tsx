@@ -41,6 +41,8 @@ export const Route = createFileRoute("/notebook/$notebookId")({
         property: "og:description",
         content: "Teaching sessions for this notebook, with transcripts, questions and feedback.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: NotebookPage,

@@ -54,6 +54,8 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Notebooks of Feynman-technique sessions: teach, get quizzed, close the holes.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Dashboard,
