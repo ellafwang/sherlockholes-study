@@ -664,6 +664,32 @@ function SessionPage() {
     stopPlayback();
   };
 
+  /* cache of in-flight/generated audio keyed by spoken text, so anything
+     prefetched (next question, feedback report) plays instantly instead of
+     waiting on a fresh voice-generation round trip after it pops up */
+  const audioCacheRef = useRef(new Map<string, Promise<{ ok: boolean; audio?: string; message?: string }>>());
+
+  const requestAudio = (spoken: string) => {
+    const key = spoken.slice(0, 3500);
+    let pending = audioCacheRef.current.get(key);
+    if (!pending) {
+      pending = speakFn({ data: { text: key } });
+      audioCacheRef.current.set(key, pending);
+      if (audioCacheRef.current.size > 20) {
+        const oldest = audioCacheRef.current.keys().next().value;
+        if (oldest) audioCacheRef.current.delete(oldest);
+      }
+    }
+    return pending;
+  };
+
+  /* warm the cache so playback starts the moment the line is needed */
+  const prefetchAudio = (text: string) => {
+    const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
+    if (!spoken) return;
+    void requestAudio(spoken).catch(() => undefined);
+  };
+
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
@@ -671,10 +697,11 @@ function SessionPage() {
     const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
-      const result = await speakFn({ data: { text: spoken.slice(0, 3500) } });
+      const result = await requestAudio(spoken);
       if (token !== speechTokenRef.current) return;
       if (!result.ok) {
-        setVoiceNotice(result.message);
+        audioCacheRef.current.delete(spoken.slice(0, 3500));
+        setVoiceNotice(result.message ?? "Sherlock's voice didn't come through.");
         return;
       }
 
