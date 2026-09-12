@@ -459,7 +459,7 @@ function SessionPage() {
     setFollowUp(null);
     setFollowUpDepth(0);
     setVerdict("yellow");
-    setReaction(SKIP_REPLIES[Math.floor(Math.random() * SKIP_REPLIES.length)] ?? SKIP_REPLIES[0]);
+    setReaction(SKIP_REPLIES[Math.floor(Math.random() * SKIP_REPLIES.length)] || SKIP_REPLIES[0]);
     if (activeQuestion.questionId) {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
