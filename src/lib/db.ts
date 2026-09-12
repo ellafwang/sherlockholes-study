@@ -43,6 +43,11 @@ export const createNotebook = async (title: string, subject: string | null, colo
 export const renameNotebook = async (id: string, title: string) =>
   unwrap(await supabase.from("notebooks").update({ title }).eq("id", id).select().single());
 
+export const updateNotebook = async (
+  id: string,
+  patch: { title?: string; subject?: string | null; color?: string },
+) => unwrap(await supabase.from("notebooks").update(patch).eq("id", id).select().single());
+
 export const deleteNotebook = async (id: string) => {
   const { error } = await supabase.from("notebooks").delete().eq("id", id);
   if (error) throw new Error(error.message);
