@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { MathText } from "@/components/MathText";
 import { cn } from "@/lib/utils";
 
@@ -147,8 +146,8 @@ export function MathKeypad({
   preview: string;
   onClose: () => void;
 }) {
-  const [group, setGroup] = useState(GROUPS[0].name);
-  const active = GROUPS.find((entry) => entry.name === group) ?? GROUPS[0];
+  const [group, setGroup] = useState(GROUPS[0]!.name);
+  const active = GROUPS.find((entry) => entry.name === group) ?? GROUPS[0]!;
 
   return (
     <div className="mt-2 rounded-xl border border-gold/50 bg-card/95 p-3 shadow-lg">
@@ -207,6 +206,3 @@ export function MathKeypad({
   );
 }
 
-export { GROUPS as MATH_KEYPAD_GROUPS };
-export type { Key as MathKeypadKey };
-export const MathKeypadToggle = Button;
