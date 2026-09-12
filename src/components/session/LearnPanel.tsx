@@ -1,6 +1,7 @@
 import { ArrowLeft, Send, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { MathText } from "@/components/MathText";
 import { LightbulbIcon } from "@/components/MysteryIcons";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,7 +117,9 @@ export function LearnPanel({
             <p className="label-caps text-muted-foreground">
               {entry.role === "user" ? "You" : "Sherlock"}
             </p>
-            <p className="whitespace-pre-line text-[0.98rem] leading-snug">{entry.content}</p>
+            <p className="whitespace-pre-line text-[0.98rem] leading-snug">
+              <MathText>{entry.content}</MathText>
+            </p>
             {entry.role !== "user" && (
               <button
                 type="button"

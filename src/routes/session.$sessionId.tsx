@@ -5,6 +5,7 @@ import { ArrowLeft, Pause, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { MathText } from "@/components/MathText";
 import { QuestionBubbleIcon, TreasureChestIcon } from "@/components/MysteryIcons";
 import { SherlockFace, type Verdict } from "@/components/SherlockFace";
 import { FeedbackPanel, type Report } from "@/components/session/FeedbackPanel";
@@ -36,6 +37,7 @@ import {
   updateSession,
 } from "@/lib/db";
 import { buildReport, gradeAnswer, gradeBlurt, learnReply, seedQuestions } from "@/lib/sherlock.functions";
+import { latexToSpeech } from "@/lib/math-speech";
 import { speakAsSherlock } from "@/lib/voice.functions";
 import { cn } from "@/lib/utils";
 
@@ -630,7 +632,7 @@ function SessionPage() {
   };
 
   const playAudio = async (text: string) => {
-    const spoken = text.replace(/[*_#`>]/g, " ").trim();
+    const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
     stopAudio();
     setVoiceLoading(true);
@@ -972,7 +974,7 @@ function SessionPage() {
                         : "var(--muted-foreground)",
               }}
             >
-              “{reaction}”
+              “<MathText>{reaction}</MathText>”
             </p>
           )}
 

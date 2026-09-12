@@ -1,6 +1,7 @@
 import { ArrowLeft, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { MathText } from "@/components/MathText";
 import { QuestionBubbleIcon } from "@/components/MysteryIcons";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ export function QaPanel({
               {entry.role === "user" ? "You" : "Sherlock"}
             </p>
             <p className={`text-[0.95rem] leading-snug ${VERDICT_TEXT[entry.verdict] ?? ""}`}>
-              {entry.content}
+              <MathText>{entry.content}</MathText>
             </p>
           </div>
         ))}
@@ -92,7 +93,7 @@ export function QaPanel({
       {question ? (
         <>
           <p className="mt-4 border-t border-border pt-4 text-lg font-semibold leading-snug">
-            {question}
+            <MathText>{question}</MathText>
           </p>
           <p className="label-caps mt-1 text-muted-foreground">
             {remaining > 0 ? `${remaining} question${remaining === 1 ? "" : "s"} left after this` : "Last one"}
