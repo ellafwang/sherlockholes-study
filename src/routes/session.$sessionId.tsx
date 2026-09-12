@@ -74,6 +74,18 @@ function mmss(total: number) {
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
 }
 
+function reportSpeechText(report: Report) {
+  const lines = [
+    report.narrative,
+    report.covered.length ? `You covered ${report.covered.join(", ")}.` : "",
+    report.answeredWell.length ? `You answered well on ${report.answeredWell.join(", ")}.` : "",
+    report.gaps.length ? `Still shaky: ${report.gaps.join(", ")}.` : "",
+    report.openQuestions.length ? `Open questions: ${report.openQuestions.join(" ")}` : "",
+    `You spoke for ${Math.round(report.speakingSeconds)} seconds and gave ${report.exampleCount} examples.`,
+  ].filter(Boolean);
+  return lines.join(" ");
+}
+
 function SessionPage() {
   const { sessionId } = Route.useParams();
   const search = Route.useSearch();
