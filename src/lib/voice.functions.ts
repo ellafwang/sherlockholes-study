@@ -6,7 +6,7 @@ const speakSchema = z.object({ text: z.string().min(1).max(4000) });
 const listenSchema = z.object({
   audio: z.string().min(16),
   mimeType: z
-    .enum(["audio/webm", "audio/webm;codecs=opus", "audio/mp4", "audio/ogg", "audio/ogg;codecs=opus"])
+    .enum(["audio/wav", "audio/webm", "audio/webm;codecs=opus", "audio/mp4", "audio/ogg", "audio/ogg;codecs=opus"])
     .default("audio/webm"),
 });
 
@@ -45,7 +45,13 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
 
     const baseMimeType = data.mimeType.split(";")[0];
     const extension =
-      baseMimeType === "audio/mp4" ? "mp4" : baseMimeType === "audio/ogg" ? "ogg" : "webm";
+      baseMimeType === "audio/wav"
+        ? "wav"
+        : baseMimeType === "audio/mp4"
+          ? "mp4"
+          : baseMimeType === "audio/ogg"
+            ? "ogg"
+            : "webm";
     const form = new FormData();
     form.append("file", new Blob([bytes], { type: data.mimeType }), `blurt.${extension}`);
     form.append("model_id", "scribe_v2");
