@@ -97,7 +97,7 @@ You are listening live while the student teaches "${data.sessionTitle}".
 Judge ONLY the newest stretch of speech, in the context of what came before.
 Also note which single concept from their material it belongs to (use their own wording, or "General" if none fits),
 count how many worked examples or concrete instances they gave in this stretch,
-and write 0 or 1 follow-up question to save for the Q&A afterwards. Only add a question if this stretch reveals a real, important gap in a concept or step that is actually defined in their notes at an undergraduate level — not a basic definition.
+and return an empty "questions" array. Do not generate follow-up questions during the blurt.
 "note" is one short sentence, addressed to the student, that you keep to yourself for now.`,
       input: `Their notes:\n${data.notes || "(none)"}
 Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
