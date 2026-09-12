@@ -128,6 +128,25 @@ function SessionPage() {
     return all ? all.split(/\s+/).length : 0;
   }, [transcriptSoFar, speech.finalText, speech.interimText]);
 
+  /* ---------- concept coverage of the explanation ---------- */
+  const coverage = useMemo(() => {
+    if (concepts.length === 0) return { covered: [] as string[], percent: 0 };
+    const haystack = `${transcriptSoFar} ${speech.finalText} ${speech.interimText}`.toLowerCase();
+    const graded = new Set(
+      (segments.data ?? []).map((segment) => segment.concept?.trim().toLowerCase()).filter(Boolean),
+    );
+    const covered = concepts.filter((concept) => {
+      const needle = concept.trim().toLowerCase();
+      if (!needle) return false;
+      if (graded.has(needle)) return true;
+      // fuzzy: concept named, or graded concept label references it
+      if (haystack.includes(needle)) return true;
+      for (const g of graded) if (g && (g.includes(needle) || needle.includes(g))) return true;
+      return false;
+    });
+    return { covered, percent: Math.round((covered.length / concepts.length) * 100) };
+  }, [concepts, transcriptSoFar, speech.finalText, speech.interimText, segments.data]);
+
   /* ---------- countdown ---------- */
   useEffect(() => {
     if (!running) return;
