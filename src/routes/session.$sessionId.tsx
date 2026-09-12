@@ -40,6 +40,9 @@ import { speakAsSherlock } from "@/lib/voice.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/session/$sessionId")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: search.view === "feedback" ? ("feedback" as const) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Teach Sherlock — Sherlock Holes" },
@@ -73,6 +76,7 @@ function mmss(total: number) {
 
 function SessionPage() {
   const { sessionId } = Route.useParams();
+  const search = Route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const speech = useSpeechRecognition();
@@ -122,6 +126,10 @@ function SessionPage() {
   const concepts = useMemo(() => (session.data ? keyConceptsOf(session.data) : []), [session.data]);
   const notes = session.data?.notes_text ?? "";
   const remaining = Math.max(0, limit - elapsed);
+
+  useEffect(() => {
+    if (search.view === "feedback") setPanel("feedback");
+  }, [search.view]);
 
   /* ---------- persisted transcript so far ---------- */
   const transcriptSoFar = useMemo(
@@ -777,8 +785,11 @@ function SessionPage() {
     );
   }
 
-  const backToNotebook = () =>
-    navigate({ to: "/notebook/$notebookId", params: { notebookId: session.data!.notebook_id } });
+  const backToNotebook = () => {
+    const notebookId = session.data?.notebook_id;
+    if (!notebookId) return;
+    navigate({ to: "/notebook/$notebookId", params: { notebookId } });
+  };
 
   if (stage === "material") {
     return (

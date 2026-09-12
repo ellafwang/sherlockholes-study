@@ -10,7 +10,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { FeedbackSidebar } from "@/components/FeedbackSidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -131,8 +133,19 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <SidebarProvider>
+        <FeedbackSidebar />
+        <SidebarInset className="min-w-0 bg-transparent">
+          <div className="sticky top-0 z-30 flex h-12 items-center border-b border-border/70 bg-background/85 px-3 backdrop-blur-md">
+            <SidebarTrigger aria-label="Toggle feedback summaries" className="h-8 w-8" />
+            <span className="ml-2 text-sm font-semibold md:hidden">Feedback summaries</span>
+          </div>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <div className="min-w-0 flex-1">
+            <Outlet />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
       <Toaster />
     </QueryClientProvider>
   );
