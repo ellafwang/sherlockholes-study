@@ -97,12 +97,12 @@ function Dashboard() {
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:py-16">
       <header className="animate-rise-in flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <MagnifierIcon className="h-10 w-10 text-foreground" />
-            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Sherlock Holes</h1>
+        <div className="flex flex-col items-center text-center">
+          <div className="flex items-center gap-2 rounded-sm border-2 border-dashed border-brass bg-card px-4 py-2 shadow-plate rotate-[-1deg]">
+            <MagnifierIcon className="h-8 w-8 text-brass" />
+            <h1 className="text-3xl font-bold uppercase tracking-widest text-foreground sm:text-4xl">Sherlock Holes</h1>
           </div>
-          <p className="mt-2 text-lg font-medium text-foreground/90">finding the gaps in your understanding.</p>
+          <p className="mt-3 text-lg font-medium text-foreground/90">Finding The Gaps In Your Understanding.</p>
           <p className="mt-3 max-w-xl text-base text-muted-foreground">
             Teach a topic out loud to Sherlock. Wherever he gets lost is
             a hole in what you know — and that's exactly where you'll study next.
