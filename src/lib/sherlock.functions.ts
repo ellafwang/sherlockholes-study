@@ -9,7 +9,8 @@ const materialSchema = z.object({
   concepts: z.array(z.string()),
 });
 
-const BOUNDARY = `You are strictly bound to the student's notes/material. You must NOT ask about anything not directly mentioned or defined in the notes. If a word or concept appears in the notes but is not defined there, do not ask for its definition; simply note it and move on. Never infer, extrapolate, or test knowledge that goes beyond what the notes actually say.`;
+const BOUNDARY = `You are strictly bound to the student's notes/material. You must NOT ask about anything not directly mentioned or defined in the notes. If a word or concept appears in the notes but is not defined there, do not ask for its definition; simply note it and move on. Never infer, extrapolate, or test knowledge that goes beyond what the notes actually say.
+Absolutely no probing, deepening or "what if" questions unless the notes themselves state the case being asked about. Before asking anything, check that the full answer is literally written in the notes; if it is not, do not ask it. Asking fewer questions is always better than asking one that reaches past the notes.`;
 
 const PERSONA = `You are Sherlock Holes: a bright undergraduate who has already taken the course on this topic.
 You have solid foundational knowledge of the curriculum — you know the core definitions, the usual theorems, and how the pieces fit together at an undergraduate level.
@@ -32,18 +33,38 @@ green = say what clicked, yellow = name the one thing you still don't get, red =
 
 /* ---------- seed questions from the material ---------- */
 
+/** Loose containment check: does this quote really appear in the notes? */
+function quotedFromNotes(notes: string, quote: string) {
+  const flatten = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const haystack = flatten(notes);
+  const needle = flatten(quote);
+  if (needle.length < 12) return false;
+  if (haystack.includes(needle)) return true;
+  // Allow a trimmed quote: most of its words must appear as a run in the notes.
+  const words = needle.split(" ");
+  if (words.length < 4) return false;
+  const window = words.slice(0, Math.max(4, Math.floor(words.length * 0.6))).join(" ");
+  return haystack.includes(window);
+}
+
 export const seedQuestions = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => materialSchema.parse(input))
   .handler(async ({ data }) => {
     const { generateJson } = await import("./ai.server");
-    const result = await generateJson<{ questions: { question: string; concept: string }[] }>({
+    const result = await generateJson<{
+      questions: { question: string; concept: string; evidence: string }[];
+    }>({
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
-Write exactly 3 questions — the 3 most important ones — a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
-Every question MUST be directly answerable using ONLY the material below. Do not ask about anything the material does not mention or define.
-If the material mentions a term but does not define it, do NOT ask what it means. If the material describes a process, ask about a step or edge case within that process only if the material itself raises it.
-Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions that are explicitly grounded in the material. Do not ask for basic definitions. One sentence each.
-Use varied openings such as "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between...".`,
+Write at most 3 questions — the most important ones — a well-prepared undergraduate classmate would ask about THIS material.
+Hard rules, no exceptions:
+- Every question must be fully answerable by reading the material alone. The complete answer must already be written in the material.
+- Never ask about implications, applications, extensions, comparisons, edge cases, proofs or consequences that the material does not itself state.
+- Never ask a student to speculate, generalise, or go one step beyond the text.
+- Never ask for the meaning of a term the material does not define.
+- If the material only supports one or two such questions, return only one or two. Fewer good questions is correct; inventing a deeper question is a failure.
+For each question, "evidence" MUST be a sentence or clause copied word-for-word from the material that contains the answer. If you cannot copy such a sentence, drop the question.
+One sentence per question. Vary the openings ("Why does...", "Walk me through...", "What does the material say about...").`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
       }`,
@@ -58,17 +79,24 @@ Use varied openings such as "What happens if...", "Why does...", "How would...",
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["question", "concept"],
+              required: ["question", "concept", "evidence"],
               properties: {
                 question: { type: "string" },
                 concept: { type: "string" },
+                evidence: { type: "string" },
               },
             },
           },
         },
       },
     });
-    return result.questions.slice(0, 3);
+
+    // Truly enforce grounding: keep only questions whose answer is quoted from the notes.
+    const grounded = result.questions.filter((item) =>
+      quotedFromNotes(data.notes, item.evidence ?? ""),
+    );
+    const chosen = grounded.length > 0 ? grounded : result.questions.slice(0, 1);
+    return chosen.slice(0, 3).map(({ question, concept }) => ({ question, concept }));
   });
 
 /* ---------- live grading during the blurt ---------- */
