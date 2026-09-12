@@ -59,7 +59,8 @@ export const Route = createFileRoute("/session/$sessionId")({
   component: SessionPage,
 });
 
-const GRADE_EVERY_MS = 15000;
+// Sherlock should visibly react while you talk, so judge short stretches often.
+const GRADE_EVERY_MS = 6000;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
