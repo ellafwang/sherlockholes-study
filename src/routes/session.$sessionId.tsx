@@ -192,26 +192,57 @@ function SessionPage() {
         queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
       } catch (error) {
         console.error(error);
+        // Never lose what the student said: keep the words even if grading failed,
+        // so the Q&A and the feedback report still have the real explanation.
+        try {
+          await addSegment({
+            session_id: sessionId,
+            transcript: chunk,
+            verdict: "neutral",
+            concept: null,
+            at_seconds: Math.round(at),
+            duration_seconds: Math.max(1, Math.round(duration)),
+            example_count: 0,
+          });
+          queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
+        } catch (saveError) {
+          console.error(saveError);
+        }
         toast.error((error as Error).message);
       } finally {
         setGrading(false);
       }
+
     },
     [concepts, gradeBlurtFn, notes, queryClient, session.data, sessionId, transcriptSoFar],
   );
 
-  /* ---------- live grading while blurting ---------- */
+  /* ---------- live grading while blurting ----------
+     Kept on refs: the clock ticks every second, and re-creating the interval
+     on every tick meant the 15s grading pass never once fired. */
+  const elapsedRef = useRef(0);
+  const gradeChunkRef = useRef(gradeChunk);
+  useEffect(() => {
+    elapsedRef.current = elapsed;
+  }, [elapsed]);
+  useEffect(() => {
+    gradeChunkRef.current = gradeChunk;
+  }, [gradeChunk]);
+
+  const drainSpeech = speech.drain;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
-      const chunk = speech.drain();
+      const chunk = drainSpeech();
       if (!chunk) return;
       const at = lastGradeAt.current;
-      lastGradeAt.current = elapsed;
-      void gradeChunk(chunk, at, Math.max(1, elapsed - at));
+      const now = elapsedRef.current;
+      lastGradeAt.current = now;
+      void gradeChunkRef.current(chunk, at, Math.max(1, now - at));
     }, GRADE_EVERY_MS);
     return () => clearInterval(id);
-  }, [running, speech, gradeChunk, elapsed]);
+  }, [running, drainSpeech]);
+
 
   /* ---------- start the blurt ---------- */
   const startTeaching = async (payload: { notes: string; concepts: string[]; limit: number }) => {
@@ -257,11 +288,13 @@ function SessionPage() {
     const chunk = speech.drain() || typedBlurt.trim();
     if (chunk) {
       const at = lastGradeAt.current;
-      lastGradeAt.current = elapsed;
-      await gradeChunk(chunk, at, Math.max(1, elapsed - at));
+      const now = elapsedRef.current;
+      lastGradeAt.current = now;
+      await gradeChunk(chunk, at, Math.max(1, now - at));
       setTypedBlurt("");
     }
   };
+
 
   const pauseTeaching = async () => {
     setRunning(false);
@@ -332,6 +365,7 @@ function SessionPage() {
         role: "user",
         content: answer,
       });
+      const spokenSoFar = ((await listSegments(sessionId)) ?? []).map((row) => row.transcript).join(" ");
       const grade = await gradeAnswerFn({
         data: {
           sessionTitle: session.data.title,
@@ -339,8 +373,10 @@ function SessionPage() {
           question: activeQuestion.question,
           answer,
           followUpDepth,
+          transcript: spokenSoFar,
         },
       });
+
       setVerdict(grade.verdict);
       await addQaTurn({
         session_id: sessionId,
@@ -421,28 +457,34 @@ function SessionPage() {
     }
     setReportBusy(true);
     try {
-      const rows = segments.data ?? [];
-      const turns = qaTurns.data ?? [];
+      // Read straight from the database: anything just spoken may not be in the
+      // cached lists yet, and the report must be built from the real transcript.
+      const [rows, turns, allQuestions] = await Promise.all([
+        listSegments(sessionId),
+        listQaTurns(sessionId),
+        listQuestions(sessionId),
+      ]);
       const subtopicTime: Record<string, number> = {};
       let speakingSeconds = 0;
       let exampleCount = 0;
-      for (const row of rows) {
+      for (const row of rows ?? []) {
         const key = row.concept?.trim() || "General";
         subtopicTime[key] = (subtopicTime[key] ?? 0) + row.duration_seconds;
         speakingSeconds += row.duration_seconds;
         exampleCount += row.example_count;
       }
-      const stillOpen = (questions.data ?? [])
+      const stillOpen = (allQuestions ?? [])
         .filter((question) => question.status !== "answered")
         .map((question) => question.question);
+
 
       const result = await buildReportFn({
         data: {
           sessionTitle: session.data.title,
           notes,
           concepts,
-          transcript: rows.map((row) => row.transcript).join(" "),
-          qaLog: turns
+          transcript: (rows ?? []).map((row) => row.transcript).join(" "),
+          qaLog: (turns ?? [])
             .map((turn) => `${turn.role === "user" ? "Student" : "Sherlock"}: ${turn.content}`)
             .join("\n"),
           openQuestions: stillOpen,
@@ -804,8 +846,9 @@ function SessionPage() {
                   const chunk = typedBlurt.trim();
                   setTypedBlurt("");
                   const at = lastGradeAt.current;
-                  lastGradeAt.current = elapsed;
-                  void gradeChunk(chunk, at, Math.max(1, elapsed - at));
+                  const now = elapsedRef.current;
+                  lastGradeAt.current = now;
+                  void gradeChunk(chunk, at, Math.max(1, now - at));
                 }}
               >
                 Send to Sherlock
