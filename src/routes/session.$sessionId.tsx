@@ -856,7 +856,10 @@ function SessionPage() {
               listening={speech.listening}
               micSupported={speech.supported}
               onToggleMic={() => (speech.listening ? void speech.stop() : speech.start())}
-              onSubmit={submitAnswer}
+              onSubmit={async (answer) => {
+                const captured = speech.listening ? await speech.stop() : "";
+                await submitAnswer(captured || answer);
+              }}
               onSkip={skipQuestion}
               onBack={() => setPanel("none")}
               onFinish={openFeedback}

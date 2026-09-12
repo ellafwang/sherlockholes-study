@@ -47,8 +47,7 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     const extension =
       baseMimeType === "audio/mp4" ? "mp4" : baseMimeType === "audio/ogg" ? "ogg" : "webm";
     const form = new FormData();
-    form.append("file", new Blob([bytes], { type: data.mimeType }), "blurt.webm");
-    form.set("file", new Blob([bytes], { type: data.mimeType }), `blurt.${extension}`);
+    form.append("file", new Blob([bytes], { type: data.mimeType }), `blurt.${extension}`);
     form.append("model_id", "scribe_v2");
     form.append("tag_audio_events", "false");
     form.append("diarize", "false");
