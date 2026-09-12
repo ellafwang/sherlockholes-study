@@ -253,6 +253,9 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
     const context = audioContextRef.current;
     const chunks = pcmRef.current;
     pcmRef.current = [];
+    bufferedSecondsRef.current = 0;
+    silenceSecondsRef.current = 0;
+    voicedSecondsRef.current = 0;
     if (!context || chunks.length === 0) return;
     // Skip clips that hold no voice at all, so silence never costs a round trip.
     let energy = 0;
@@ -266,17 +269,32 @@ export function useSpeechRecognition(options: SpeechOptions = {}): SpeechState {
     const duration = count / context.sampleRate;
     const offset = elapsedAudioRef.current;
     elapsedAudioRef.current += duration;
-    if (count === 0 || Math.sqrt(energy / count) < 0.006) return;
+    // Too short, or too quiet, means guesswork for the transcriber — drop it.
+    if (count === 0 || duration < 0.5 || Math.sqrt(energy / count) < 0.008) return;
     const blob = encodeWav(chunks, context.sampleRate);
     if (blob.size >= 2_048) sendClip(blob, "audio/wav", offset);
   }, [sendClip]);
 
+  /** Cuts the clip at a natural pause instead of mid-word. */
   const scheduleFlush = useCallback(() => {
     if (!wantsListeningRef.current) return;
     cycleTimer.current = setTimeout(() => {
-      flushPcm();
+      const buffered = bufferedSecondsRef.current;
+      const voiced = voicedSecondsRef.current;
+      const silence = silenceSecondsRef.current;
+      const finishedSentence =
+        buffered >= MIN_CLIP_SECONDS && voiced >= 0.4 && silence >= SILENCE_SECONDS;
+      if (finishedSentence || buffered >= MAX_CLIP_SECONDS) {
+        flushPcm();
+      } else if (buffered >= MIN_CLIP_SECONDS && voiced < 0.2) {
+        // Nothing but room noise so far: throw it away rather than transcribe it.
+        pcmRef.current = [];
+        bufferedSecondsRef.current = 0;
+        silenceSecondsRef.current = 0;
+        voicedSecondsRef.current = 0;
+      }
       scheduleFlush();
-    }, CLIP_MS);
+    }, TICK_MS);
   }, [flushPcm]);
 
   const startCaptions = useCallback(() => {
