@@ -59,8 +59,8 @@ export const Route = createFileRoute("/session/$sessionId")({
   component: SessionPage,
 });
 
-// Sherlock should visibly react while you talk, so judge short stretches often.
-const GRADE_EVERY_MS = 6000;
+// Sherlock listens and judges every second, so his face tracks what you say.
+const GRADE_EVERY_MS = 1000;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
@@ -232,10 +232,17 @@ function SessionPage() {
     gradeChunkRef.current = gradeChunk;
   }, [gradeChunk]);
 
+  // One judgement at a time: words stay banked until the current one comes back.
+  const gradingRef = useRef(false);
+  useEffect(() => {
+    gradingRef.current = grading;
+  }, [grading]);
+
   const drainSpeech = speech.drain;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
+      if (gradingRef.current) return;
       const chunk = drainSpeech();
       if (!chunk) return;
       const at = lastGradeAt.current;

@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { transcribeSpeech } from "@/lib/voice.functions";
 
-/* How long each complete WAV clip is before it is sent for transcription. */
-const CLIP_MS = 4500;
+/* How long each complete WAV clip is before it is sent for transcription.
+   Short clips keep the words arriving almost as fast as they are spoken. */
+const CLIP_MS = 1200;
 const WAVEFORM_BARS = 28;
 
 type SpeechRecognitionLike = {
@@ -194,6 +195,16 @@ export function useSpeechRecognition(): SpeechState {
     const chunks = pcmRef.current;
     pcmRef.current = [];
     if (!context || chunks.length === 0) return;
+    // Skip clips that hold no voice at all, so silence never costs a round trip.
+    let energy = 0;
+    let count = 0;
+    for (const chunk of chunks) {
+      for (let i = 0; i < chunk.length; i += 1) {
+        energy += (chunk[i] ?? 0) ** 2;
+        count += 1;
+      }
+    }
+    if (count === 0 || Math.sqrt(energy / count) < 0.006) return;
     const blob = encodeWav(chunks, context.sampleRate);
     if (blob.size >= 2_048) sendClip(blob, "audio/wav");
   }, [sendClip]);
