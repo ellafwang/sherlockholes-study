@@ -61,7 +61,7 @@ export const Route = createFileRoute("/session/$sessionId")({
 
 // Sherlock listens and judges every second, so his face tracks what you say.
 const GRADE_EVERY_MS = 1000;
-const MAX_QA_QUESTIONS = 5;
+const MAX_QA_QUESTIONS = 3;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
@@ -419,23 +419,11 @@ function SessionPage() {
         ]);
         queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
       }
-      if (grade.followUpQuestion && followUpDepth < 1) {
-        setFollowUp({ question: grade.followUpQuestion, questionId: activeQuestion.questionId });
-        setFollowUpDepth((depth) => depth + 1);
-        await addQaTurn({
-          session_id: sessionId,
-          question_id: activeQuestion.questionId,
-          role: "sherlock",
-          content: grade.followUpQuestion,
-          verdict: grade.verdict,
-        });
-      } else {
-        setFollowUp(null);
-        setFollowUpDepth(0);
-        if (activeQuestion.questionId) {
-          await setQuestionStatus(activeQuestion.questionId, grade.verdict === "green" ? "answered" : "missed");
-          queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
-        }
+      setFollowUp(null);
+      setFollowUpDepth(0);
+      if (activeQuestion.questionId) {
+        await setQuestionStatus(activeQuestion.questionId, grade.verdict === "green" ? "answered" : "missed");
+        queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
       }
       speech.reset();
       queryClient.invalidateQueries({ queryKey: ["qa", sessionId] });
