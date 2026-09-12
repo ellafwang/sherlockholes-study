@@ -177,7 +177,7 @@ export const listFeedbackSummaries = async (): Promise<FeedbackSummaryItem[]> =>
       .from("summaries")
       .select("id, session_id, narrative, covered, gaps, created_at, sessions(id, title)")
       .order("created_at", { ascending: false }),
-  );
+  ) ?? [];
 
 export const saveSummary = async (row: {
   session_id: string;

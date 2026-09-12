@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/session/$sessionId")({
   validateSearch: (search: Record<string, unknown>) => ({
-    view: search.view === "feedback" ? ("feedback" as const) : undefined,
+    view: search["view"] === "feedback" ? ("feedback" as const) : undefined,
   }),
   head: () => ({
     meta: [
