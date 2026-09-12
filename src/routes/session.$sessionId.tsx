@@ -200,18 +200,32 @@ function SessionPage() {
     [concepts, gradeBlurtFn, notes, queryClient, session.data, sessionId, transcriptSoFar],
   );
 
-  /* ---------- live grading while blurting ---------- */
+  /* ---------- live grading while blurting ----------
+     Kept on refs: the clock ticks every second, and re-creating the interval
+     on every tick meant the 15s grading pass never once fired. */
+  const elapsedRef = useRef(0);
+  const gradeChunkRef = useRef(gradeChunk);
+  useEffect(() => {
+    elapsedRef.current = elapsed;
+  }, [elapsed]);
+  useEffect(() => {
+    gradeChunkRef.current = gradeChunk;
+  }, [gradeChunk]);
+
+  const drainSpeech = speech.drain;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
-      const chunk = speech.drain();
+      const chunk = drainSpeech();
       if (!chunk) return;
       const at = lastGradeAt.current;
-      lastGradeAt.current = elapsed;
-      void gradeChunk(chunk, at, Math.max(1, elapsed - at));
+      const now = elapsedRef.current;
+      lastGradeAt.current = now;
+      void gradeChunkRef.current(chunk, at, Math.max(1, now - at));
     }, GRADE_EVERY_MS);
     return () => clearInterval(id);
-  }, [running, speech, gradeChunk, elapsed]);
+  }, [running, drainSpeech]);
+
 
   /* ---------- start the blurt ---------- */
   const startTeaching = async (payload: { notes: string; concepts: string[]; limit: number }) => {
