@@ -89,7 +89,7 @@ function NotebookPage() {
       queryClient.invalidateQueries({ queryKey: ["sessions", notebookId] });
       setCreating(false);
       setTitle("");
-      if (session) navigate({ to: "/session/$sessionId", params: { sessionId: session.id }, search: {} });
+      if (session) navigate({ to: "/session/$sessionId", params: { sessionId: session.id }, search: { view: undefined } });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -153,7 +153,7 @@ function NotebookPage() {
               <Link
                 to="/session/$sessionId"
                 params={{ sessionId: session.id }}
-                search={{}}
+                search={{ view: undefined }}
                 className="flex items-center justify-between gap-4 p-5 pr-14"
               >
                 <div>
