@@ -637,9 +637,12 @@ function SessionPage() {
   /* bumped on every stop so queued speech from a closed panel never starts */
   const speechTokenRef = useRef(0);
   const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
+  /* bumped only by stopAudio, so queued lines survive each other's playback */
+  const speechGenRef = useRef(0);
 
   const stopAudio = () => {
     speechTokenRef.current += 1;
+    speechGenRef.current += 1;
     speechQueueRef.current = Promise.resolve();
     pendingPlayRef.current = null;
     const audio = audioRef.current;
@@ -728,9 +731,9 @@ function SessionPage() {
 
   /* speak one thing after another instead of cutting the previous line off */
   const queueAudio = (text: string) => {
-    const token = speechTokenRef.current;
+    const generation = speechGenRef.current;
     speechQueueRef.current = speechQueueRef.current
-      .then(() => (token === speechTokenRef.current ? playAudio(text) : undefined))
+      .then(() => (generation === speechGenRef.current ? playAudio(text) : undefined))
       .catch(() => undefined);
   };
 
