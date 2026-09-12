@@ -14,9 +14,12 @@ export function LearnPanel({
   nextTopic,
   busy,
   voiceNotice,
+  speaking,
+  voiceLoading,
   onSend,
   onTeachTopic,
   onReplay,
+  onStopVoice,
   onBack,
 }: {
   entries: LearnEntry[];
@@ -25,9 +28,12 @@ export function LearnPanel({
   nextTopic: string | null;
   busy: boolean;
   voiceNotice: string | null;
+  speaking: boolean;
+  voiceLoading: boolean;
   onSend: (message: string) => void;
   onTeachTopic: (topic: string) => void;
   onReplay: (text: string) => void;
+  onStopVoice: () => void;
   onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -83,6 +89,18 @@ export function LearnPanel({
             })}
           </div>
         </>
+      )}
+
+      {(speaking || voiceLoading) && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-brass" aria-live="polite">
+          <Volume2 className={`h-4 w-4 ${speaking ? "animate-pulse" : ""}`} />
+          <span>{voiceLoading ? "Sherlock is clearing his throat…" : "Sherlock is speaking…"}</span>
+          {speaking && (
+            <button type="button" onClick={onStopVoice} className="label-caps text-brass hover:underline">
+              Stop
+            </button>
+          )}
+        </div>
       )}
 
       {voiceNotice && <p className="mt-3 text-sm text-muted-foreground">{voiceNotice}</p>}

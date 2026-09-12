@@ -107,6 +107,8 @@ function SessionPage() {
   const [reportBusy, setReportBusy] = useState(false);
   const [learnBusy, setLearnBusy] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
   const lastGradeAt = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -482,21 +484,36 @@ function SessionPage() {
   };
 
   /* ---------- learn mode ---------- */
+  const stopAudio = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setSpeaking(false);
+  };
+
   const playAudio = async (text: string) => {
+    const spoken = text.replace(/[*_#`>]/g, " ").trim();
+    if (!spoken) return;
+    stopAudio();
+    setVoiceLoading(true);
     try {
-      const result = await speakFn({ data: { text: text.slice(0, 3500) } });
+      const result = await speakFn({ data: { text: spoken.slice(0, 3500) } });
       if (!result.ok) {
         setVoiceNotice(result.message);
         return;
       }
       setVoiceNotice(null);
-      audioRef.current?.pause();
       const audio = new Audio(`data:audio/mpeg;base64,${result.audio}`);
       audioRef.current = audio;
+      audio.onended = () => setSpeaking(false);
+      audio.onpause = () => setSpeaking(false);
+      setSpeaking(true);
       await audio.play();
     } catch (error) {
       console.error(error);
-      setVoiceNotice("Sherlock's voice didn't come through — his words are on screen.");
+      setSpeaking(false);
+      setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+    } finally {
+      setVoiceLoading(false);
     }
   };
 
@@ -860,10 +877,16 @@ function SessionPage() {
               nextTopic={nextLearnTopic}
               busy={learnBusy}
               voiceNotice={voiceNotice}
+              speaking={speaking}
+              voiceLoading={voiceLoading}
               onSend={sendLearn}
               onTeachTopic={teachTopic}
               onReplay={playAudio}
-              onBack={() => setPanel("feedback")}
+              onStopVoice={stopAudio}
+              onBack={() => {
+                stopAudio();
+                setPanel("feedback");
+              }}
             />
           )}
         </aside>
