@@ -232,7 +232,7 @@ function SessionPage() {
       }
 
     },
-    [concepts, gradeBlurtFn, notes, queryClient, session.data, sessionId, transcriptSoFar],
+    [concepts, gradeBlurtFn, notes, queryClient, questions.data, session.data, sessionId, transcriptSoFar],
   );
 
   /* ---------- live grading while blurting ----------
