@@ -116,6 +116,7 @@ function SessionPage() {
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
+  const [retake, setRetake] = useState(false);
   const lastGradeAt = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
