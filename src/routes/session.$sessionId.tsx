@@ -127,6 +127,9 @@ function SessionPage() {
   const concepts = useMemo(() => (session.data ? keyConceptsOf(session.data) : []), [session.data]);
   const notes = session.data?.notes_text ?? "";
   const remaining = Math.max(0, limit - elapsed);
+  // A session is complete once its feedback summary exists; the mic stays
+  // locked unless the user deliberately starts a fresh attempt (teachAgain).
+  const speakingLocked = Boolean(summary.data) && !retake;
 
   useEffect(() => {
     if (search.view === "feedback") setPanel("feedback");
