@@ -116,7 +116,7 @@ export type SpeechState = {
 
 /**
  * Captures the student's voice. Clips are recorded from the microphone and
- * transcribed server-side (ElevenLabs Scribe), which works in every browser.
+ * transcribed server-side in English only, which works in every browser.
  * The browser's own recogniser, when present, only supplies live captions
  * while a clip is still being spoken.
  */
