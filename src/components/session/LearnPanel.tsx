@@ -113,6 +113,17 @@ export function LearnPanel({
         {busy && <p className="text-muted-foreground">Sherlock is composing his explanation…</p>}
       </div>
 
+      {nextTopic && (
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={() => onTeachTopic(nextTopic)}
+          className="mt-3 justify-start border-gold/60"
+        >
+          <LightbulbIcon className="mr-2 h-4 w-4" /> Explain “{nextTopic}”
+        </Button>
+      )}
+
       <div className="mt-4 flex items-end gap-2 border-t border-border pt-4">
         <Textarea
           value={draft}
