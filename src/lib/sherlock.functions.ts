@@ -170,13 +170,14 @@ ${GRADER}
 
 You asked the student a question about "${data.sessionTitle}" and they answered.
 Grade the answer, then respond in character with a one-sentence "reply". Do NOT ask a follow-up question.
+${BOUNDARY}
 - green: satisfied. "reply" thanks them in one sentence.
 - yellow: note what was missing in one sentence, then move on. Do not ask another question.
-- red: the answer is wrong. Do NOT reveal the correct answer. missedConcept names the concept they got wrong.
+- red: the answer is wrong or contradicts the notes. Do NOT reveal the correct answer. missedConcept names the concept they got wrong, but only if that concept is explicitly in the notes.
 Set followUpQuestion to null always.
-Set missedConcept to null unless the verdict is red or a non-basic definition was clearly missing.
+Set missedConcept to null unless the verdict is red or a non-basic definition that appears in the notes was clearly missing.
 Do not ask them to define or explain anything that is not defined in their notes or that an undergraduate would already know; if the notes do not define it, simply move on.
-Judge the answer against what they already told you while teaching: praise consistency, and challenge contradictions.`,
+Judge the answer against what they already told you while teaching and against the notes only: praise consistency, and challenge contradictions.`,
       input: `Their notes:\n${data.notes || "(none)"}\n\nWhat they said while teaching you:\n${data.transcript || "(they said nothing yet)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
       schemaName: "answer_grade",
       schema: {
