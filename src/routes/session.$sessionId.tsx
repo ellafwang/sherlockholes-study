@@ -107,6 +107,8 @@ function SessionPage() {
   const [reportBusy, setReportBusy] = useState(false);
   const [learnBusy, setLearnBusy] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
   const lastGradeAt = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
