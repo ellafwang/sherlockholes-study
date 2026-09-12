@@ -100,6 +100,27 @@ export async function generateJson<T>(args: {
   return JSON.parse(raw) as T;
 }
 
+/** Reads the text out of an image (data URL) using the vision model. */
+export async function readImageText(args: {
+  instructions: string;
+  dataUrl: string;
+}): Promise<string> {
+  const text = await callGateway({
+    input: [
+      { role: "developer", content: [{ type: "input_text", text: args.instructions }] },
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: "Transcribe every piece of text and diagram label in this image." },
+          { type: "input_image", image_url: args.dataUrl },
+        ],
+      },
+    ],
+    store: false,
+  });
+  return text;
+}
+
 export async function generateProse(args: {
   instructions: string;
   input: string;
