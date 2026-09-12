@@ -579,6 +579,24 @@ function SessionPage() {
         example_count: exampleCount,
         narrative: result.narrative,
       });
+
+      // Start speaking the instant the report is saved so the student hears
+      // the summary as the feedback panel renders.
+      const freshReport: Report = {
+        covered: result.covered,
+        answeredWell: result.answeredWell,
+        gaps: result.gaps,
+        openQuestions: stillOpen,
+        subtopicTime,
+        speakingSeconds,
+        exampleCount,
+        narrative: result.narrative,
+      };
+      speakOnce(
+        `report:${sessionId}:${result.narrative.slice(0, 40)}`,
+        reportSpeechText(freshReport),
+      );
+
       const existing = new Set(
         ((await listLearnTopics(sessionId)) ?? []).map((topic) =>
           topic.topic.trim().toLowerCase(),
