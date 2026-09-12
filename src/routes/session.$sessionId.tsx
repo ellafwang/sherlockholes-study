@@ -61,6 +61,7 @@ export const Route = createFileRoute("/session/$sessionId")({
 
 // Sherlock listens and judges every second, so his face tracks what you say.
 const GRADE_EVERY_MS = 1000;
+const MAX_QA_QUESTIONS = 5;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
