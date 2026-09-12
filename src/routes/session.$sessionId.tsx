@@ -630,7 +630,7 @@ function SessionPage() {
   };
 
   const playAudio = async (text: string) => {
-    const spoken = text.replace(/[*_#`>]/g, " ").trim();
+    const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
     stopAudio();
     setVoiceLoading(true);
@@ -972,7 +972,7 @@ function SessionPage() {
                         : "var(--muted-foreground)",
               }}
             >
-              “{reaction}”
+              “<MathText>{reaction}</MathText>”
             </p>
           )}
 
