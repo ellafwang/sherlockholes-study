@@ -640,10 +640,9 @@ function SessionPage() {
   /* bumped only by stopAudio, so queued lines survive each other's playback */
   const speechGenRef = useRef(0);
 
-  const stopAudio = () => {
+  /* stops whatever is playing without cancelling anything queued behind it */
+  const stopPlayback = () => {
     speechTokenRef.current += 1;
-    speechGenRef.current += 1;
-    speechQueueRef.current = Promise.resolve();
     pendingPlayRef.current = null;
     const audio = audioRef.current;
     if (audio) {
@@ -659,10 +658,17 @@ function SessionPage() {
     setVoiceLoading(false);
   };
 
+  /* full stop: current line and everything queued after it */
+  const stopAudio = () => {
+    speechGenRef.current += 1;
+    speechQueueRef.current = Promise.resolve();
+    stopPlayback();
+  };
+
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
-    stopAudio();
+    stopPlayback();
     const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
