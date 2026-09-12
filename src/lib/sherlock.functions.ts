@@ -13,7 +13,8 @@ const PERSONA = `You are Sherlock Holes: a bright undergraduate who has already 
 You have solid foundational knowledge of the curriculum — you know the core definitions, the usual theorems, and how the pieces fit together at an undergraduate level.
 You are helping a fellow student study by listening to their explanation and asking the kind of probing questions a prepared classmate would ask: about edge cases, why a step works, how two ideas connect, or when a rule breaks.
 You do NOT ask for basic definitions or concepts you would already know from the course. You only push on things that are genuinely unclear, subtle, or missing from the notes.
-You are curious, respectful, and concise. Keep every question to one short sentence.`;
+You are curious, respectful, and concise. Keep every question to one short sentence.
+Vary how you phrase questions. Never start a question with "I do not understand" or "I don't get it".`;
 
 const GRADER = `You judge how completely a student is explaining their own material, from the perspective of a prepared undergraduate classmate.
 You MUST react with a verdict on every stretch of speech that asserts anything at all.
@@ -34,9 +35,10 @@ export const seedQuestions = createServerFn({ method: "POST" })
     const result = await generateJson<{ questions: { question: string; concept: string }[] }>({
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
-Write 5 to 7 questions a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
+Write exactly 5 questions — the 5 most important ones — a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
 Every question MUST be answerable from the material below — never ask about anything it does not mention.
-Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions. Do not ask for basic definitions. One sentence each.`,
+Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions. Do not ask for basic definitions. One sentence each.
+Use varied openings such as "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between...".`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
       }`,
@@ -61,7 +63,7 @@ Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, 
         },
       },
     });
-    return result.questions.slice(0, 7);
+    return result.questions.slice(0, 5);
   });
 
 /* ---------- live grading during the blurt ---------- */
@@ -95,7 +97,7 @@ You are listening live while the student teaches "${data.sessionTitle}".
 Judge ONLY the newest stretch of speech, in the context of what came before.
 Also note which single concept from their material it belongs to (use their own wording, or "General" if none fits),
 count how many worked examples or concrete instances they gave in this stretch,
-and write 0 to 2 questions to save for the Q&A afterwards, aimed only at concepts or steps that are actually defined in their notes, at an undergraduate level — not basic definitions.
+and write 0 or 1 follow-up question to save for the Q&A afterwards. Only add a question if this stretch reveals a real, important gap in a concept or step that is actually defined in their notes at an undergraduate level — not a basic definition.
 "note" is one short sentence, addressed to the student, that you keep to yourself for now.`,
       input: `Their notes:\n${data.notes || "(none)"}
 Key concepts:\n${data.concepts.join(", ") || "(none listed)"}
@@ -162,12 +164,13 @@ ${GRADER}
 You asked the student a question about "${data.sessionTitle}" and they answered.
 Grade the answer, then respond in character:
 - green: satisfied. "reply" thanks them in one sentence. followUpQuestion must be null.
-- yellow: press for the missing detail. followUpQuestion asks them to elaborate on something they actually said, but only if the detail is defined in their notes and is not a basic definition you would already know from the course.
+- yellow: press for the missing detail with at most ONE follow-up question. Ask in a fresh format — "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between..." — and only if the detail is defined in their notes and is not a basic definition you would already know from the course.
 - red: the answer is wrong. Do NOT reveal the correct answer. followUpQuestion is a related question that nudges them to
-  reason toward it themselves, and missedConcept names the concept they got wrong.
-${data.followUpDepth >= 2 ? "You have already followed up twice; set followUpQuestion to null and move on." : ""}
+  reason toward it themselves, and missedConcept names the concept they got wrong. Use at most ONE follow-up.
+${data.followUpDepth >= 1 ? "You have already followed up once; set followUpQuestion to null and move on." : ""}
 Set missedConcept to null unless the verdict is red or a non-basic definition was clearly missing.
 Do not ask them to define or explain anything that is not defined in their notes or that an undergraduate would already know; if the notes do not define it, simply move on.
+Never start a follow-up with "I do not understand" or "I don't get it".
 Judge the answer against what they already told you while teaching: praise consistency, and challenge contradictions.`,
       input: `Their notes:\n${data.notes || "(none)"}\n\nWhat they said while teaching you:\n${data.transcript || "(they said nothing yet)"}\n\nYour question:\n${data.question}\n\nTheir answer:\n${data.answer}`,
       schemaName: "answer_grade",

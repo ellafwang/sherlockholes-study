@@ -61,6 +61,7 @@ export const Route = createFileRoute("/session/$sessionId")({
 
 // Sherlock listens and judges every second, so his face tracks what you say.
 const GRADE_EVERY_MS = 1000;
+const MAX_QA_QUESTIONS = 5;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
@@ -192,15 +193,19 @@ function SessionPage() {
           example_count: Math.max(0, grade.examples),
         });
         if (grade.questions.length > 0) {
-          await addQuestions(
-            sessionId,
-            grade.questions.slice(0, 2).map((item) => ({
-              question: item.question,
-              concept: item.concept || null,
-              source: "blurt",
-            })),
-          );
-          queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+          const pendingCount = (questions.data ?? []).filter((q) => q.status === "pending").length;
+          const room = Math.max(0, MAX_QA_QUESTIONS - pendingCount);
+          if (room > 0) {
+            await addQuestions(
+              sessionId,
+              grade.questions.slice(0, room).map((item) => ({
+                question: item.question,
+                concept: item.concept || null,
+                source: "blurt",
+              })),
+            );
+            queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+          }
         }
         queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
       } catch (error) {
@@ -227,7 +232,7 @@ function SessionPage() {
       }
 
     },
-    [concepts, gradeBlurtFn, notes, queryClient, session.data, sessionId, transcriptSoFar],
+    [concepts, gradeBlurtFn, notes, queryClient, questions.data, session.data, sessionId, transcriptSoFar],
   );
 
   /* ---------- live grading while blurting ----------
@@ -414,7 +419,7 @@ function SessionPage() {
         ]);
         queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
       }
-      if (grade.followUpQuestion && followUpDepth < 2) {
+      if (grade.followUpQuestion && followUpDepth < 1) {
         setFollowUp({ question: grade.followUpQuestion, questionId: activeQuestion.questionId });
         setFollowUpDepth((depth) => depth + 1);
         await addQaTurn({
@@ -441,12 +446,20 @@ function SessionPage() {
     }
   };
 
+  const SKIP_REPLIES = [
+    "I'll note that as an open question.",
+    "Let's park that one for now.",
+    "We'll circle back to that.",
+    "That's one to review later.",
+    "Moving on — we can return to this.",
+  ];
+
   const skipQuestion = async () => {
     if (!activeQuestion) return;
     setFollowUp(null);
     setFollowUpDepth(0);
     setVerdict("yellow");
-    setReaction("I still don't understand that one — let's come back to it.");
+    setReaction(SKIP_REPLIES[Math.floor(Math.random() * SKIP_REPLIES.length)]!);
     if (activeQuestion.questionId) {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
