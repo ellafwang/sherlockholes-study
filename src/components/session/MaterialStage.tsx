@@ -69,7 +69,6 @@ export function MaterialStage({
             onValueChange={setNotes}
             placeholder="Paste your lecture notes, textbook section or summary here…"
             className="min-h-56"
-            keypadLabel="Math keypad"
           />
           <input
             ref={fileInput}
