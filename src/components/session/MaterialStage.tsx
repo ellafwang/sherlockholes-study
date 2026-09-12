@@ -95,17 +95,41 @@ export function MaterialStage({
             <input
               ref={fileInput}
               type="file"
-              accept=".txt,.md,.csv,.json,text/plain"
+              multiple
+              accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json,.rtf,application/pdf,text/plain"
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void readFile(file);
+                const files = Array.from(event.target.files ?? []);
+                if (files.length > 0) void readFiles(files);
                 event.target.value = "";
               }}
             />
-            <Button variant="secondary" onClick={() => fileInput.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" /> Upload a text file
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                disabled={reading}
+                onClick={() => fileInput.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {reading ? "Reading your files…" : "Upload files"}
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                PDF, Word (.docx), text, markdown or CSV — several at once.
+              </span>
+            </div>
+            {sources.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {sources.map((name, index) => (
+                  <li
+                    key={`${name}-${index}`}
+                    className="rounded-full border border-border px-3 py-1 text-sm"
+                  >
+                    <FileText className="mr-1 inline h-3.5 w-3.5" />
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            )}
           </TabsContent>
 
           <TabsContent value="concepts" className="space-y-3">
