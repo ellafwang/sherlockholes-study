@@ -25,39 +25,15 @@ export type ListenResult =
   | { ok: true; text: string; turns: TranscriptTurn[]; events: string[] }
   | { ok: false; reason: "not_connected" | "failed"; message: string };
 
-type ScribeWord = {
-  text?: string;
-  type?: string;
-  start?: number;
-  end?: number;
-  speaker_id?: string;
-};
-
-/** Groups word-level results into speaker turns with timestamps. */
-function buildTurns(words: ScribeWord[]): { turns: TranscriptTurn[]; events: string[] } {
-  const turns: TranscriptTurn[] = [];
-  const events: string[] = [];
-  for (const word of words) {
-    const text = word.text ?? "";
-    if (word.type === "audio_event") {
-      if (text.trim()) events.push(text.trim());
-      continue;
-    }
-    if (!text) continue;
-    const speaker = word.speaker_id ?? "speaker_0";
-    const last = turns[turns.length - 1];
-    if (last && last.speaker === speaker) {
-      last.text += text;
-      last.end = word.end ?? last.end;
-      continue;
-    }
-    if (word.type === "spacing") continue;
-    turns.push({ speaker, start: word.start ?? 0, end: word.end ?? word.start ?? 0, text });
-  }
-  return {
-    turns: turns.map((turn) => ({ ...turn, text: turn.text.replace(/\s+/g, " ").trim() })).filter((t) => t.text),
-    events,
+/** Gemini expects ISO-639-1 ("en"); the UI pins ISO-639-3 ("eng"). */
+function toGeminiLanguage(code: string): string {
+  const iso3ToIso1: Record<string, string> = {
+    eng: "en", spa: "es", fra: "fr", deu: "de", ita: "it", por: "pt",
+    nld: "nl", pol: "pl", rus: "ru", jpn: "ja", kor: "ko", zho: "zh",
+    ara: "ar", hin: "hi", tur: "tr", vie: "vi", tha: "th", swe: "sv",
   };
+  const normalized = code.trim().toLowerCase();
+  return iso3ToIso1[normalized] ?? normalized.slice(0, 2);
 }
 
 /**
