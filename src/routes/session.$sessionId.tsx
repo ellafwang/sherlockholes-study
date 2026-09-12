@@ -348,7 +348,7 @@ function SessionPage() {
         role: "user",
         content: answer,
       });
-      const spokenSoFar = (await listSegments(sessionId)).map((row) => row.transcript).join(" ");
+      const spokenSoFar = ((await listSegments(sessionId)) ?? []).map((row) => row.transcript).join(" ");
       const grade = await gradeAnswerFn({
         data: {
           sessionTitle: session.data.title,
