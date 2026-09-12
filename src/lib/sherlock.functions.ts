@@ -39,8 +39,9 @@ export const seedQuestions = createServerFn({ method: "POST" })
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
 Write exactly 3 questions — the 3 most important ones — a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
-Every question MUST be answerable from the material below — never ask about anything it does not mention.
-Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions. Do not ask for basic definitions. One sentence each.
+Every question MUST be directly answerable using ONLY the material below. Do not ask about anything the material does not mention or define.
+If the material mentions a term but does not define it, do NOT ask what it means. If the material describes a process, ask about a step or edge case within that process only if the material itself raises it.
+Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions that are explicitly grounded in the material. Do not ask for basic definitions. One sentence each.
 Use varied openings such as "What happens if...", "Why does...", "How would...", "Walk me through...", "What's the difference between...".`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
