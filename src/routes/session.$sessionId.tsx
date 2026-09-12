@@ -974,7 +974,7 @@ function SessionPage() {
             </div>
           )}
 
-          {stage === "teach" && panel === "none" && (
+          {stage === "teach" && panel === "none" && !speakingLocked && (
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {running ? (
                 <Button variant="secondary" onClick={pauseTeaching}>
