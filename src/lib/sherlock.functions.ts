@@ -35,7 +35,8 @@ export const seedQuestions = createServerFn({ method: "POST" })
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
 Write 5 to 7 questions a confused student would need answered to truly understand this material.
-Cover definitions, conditions, edge cases and "why" questions. One sentence each.`,
+Every question MUST be answerable from the material below — never ask about anything it does not mention.
+Cover definitions, conditions, edge cases and "why" questions found in the material. One sentence each.`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
       }`,
