@@ -4,7 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { MagnifierIcon, NotebookIcon } from "@/components/MysteryIcons";
+import { CaseFileIcon, MagnifierIcon } from "@/components/MysteryIcons";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -28,6 +28,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createNotebook, deleteNotebook, listNotebooks, type Notebook } from "@/lib/db";
 
+const NOTEBOOK_COLORS = [
+  { value: "gold", label: "Gold", className: "bg-notebook-gold" },
+  { value: "crimson", label: "Crimson", className: "bg-notebook-crimson" },
+  { value: "forest", label: "Forest green", className: "bg-notebook-forest" },
+  { value: "navy", label: "Navy blue", className: "bg-notebook-navy" },
+  { value: "plum", label: "Plum", className: "bg-notebook-plum" },
+  { value: "charcoal", label: "Charcoal", className: "bg-notebook-charcoal" },
+] as const;
+
+const notebookColorClass = (color: string | undefined) =>
+  NOTEBOOK_COLORS.find((option) => option.value === color)?.className ?? "bg-notebook-gold";
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -42,6 +54,8 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Notebooks of Feynman-technique sessions: teach, get quizzed, close the holes.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Dashboard,
@@ -54,15 +68,17 @@ function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
+  const [color, setColor] = useState("gold");
   const [pendingDelete, setPendingDelete] = useState<Notebook | null>(null);
 
   const create = useMutation({
-    mutationFn: () => createNotebook(title.trim(), subject.trim() || null),
+    mutationFn: () => createNotebook(title.trim(), subject.trim() || null, color),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notebooks"] });
       setCreating(false);
       setTitle("");
       setSubject("");
+      setColor("gold");
       toast.success("Notebook opened");
     },
     onError: (error: Error) => toast.error(error.message),
@@ -109,7 +125,7 @@ function Dashboard() {
 
         {notebooks.data?.length === 0 && (
           <div className="case-file mt-6 p-10 text-center">
-            <NotebookIcon className="mx-auto h-12 w-12 text-foreground" />
+            <CaseFileIcon className="mx-auto h-14 w-14 text-notebook-gold" />
             <p className="mt-4 text-lg">No notebooks yet.</p>
             <p className="mt-1 text-muted-foreground">
               Start one for a course, a chapter, or a single stubborn topic.
@@ -122,14 +138,15 @@ function Dashboard() {
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {notebooks.data?.map((notebook) => (
-            <div key={notebook.id} className="case-file animate-rise-in group relative p-5">
+            <div key={notebook.id} className="case-file animate-rise-in group relative overflow-hidden p-5">
+              <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 ${notebookColorClass(notebook.color)}`} />
               <Link
                 to="/notebook/$notebookId"
                 params={{ notebookId: notebook.id }}
                 className="block"
                 aria-label={`Open ${notebook.title}`}
               >
-                <NotebookIcon className="h-10 w-10 text-foreground" />
+                <CaseFileIcon className={`h-12 w-12 ${notebookColorClass(notebook.color).replace("bg-", "text-")}`} />
                 <h3 className="mt-4 text-xl font-semibold leading-tight">{notebook.title}</h3>
                 {notebook.subject && (
                   <p className="mt-1 text-sm text-muted-foreground">{notebook.subject}</p>
@@ -170,6 +187,28 @@ function Dashboard() {
                 }}
               />
             </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Case-file color</legend>
+              <div className="flex flex-wrap gap-3">
+                {NOTEBOOK_COLORS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label={option.label}
+                    aria-pressed={color === option.value}
+                    title={option.label}
+                    className={`h-10 w-10 rounded-full p-1.5 ${
+                      color === option.value ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
+                    }`}
+                    onClick={() => setColor(option.value)}
+                  >
+                    <span aria-hidden className={`h-full w-full rounded-full border border-foreground/20 ${option.className}`} />
+                  </Button>
+                ))}
+              </div>
+            </fieldset>
             <div className="space-y-2">
               <Label htmlFor="notebook-subject">Subject (optional)</Label>
               <Input

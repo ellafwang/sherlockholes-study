@@ -14,6 +14,7 @@
 - Learn from Sherlock: focus topics from gaps, chat explanations, ElevenLabs spoken playback
 - ElevenLabs connected and verified; AI grading/report/learn verified end to end in the browser
 - Sherlock voice uses the selected ElevenLabs voice ID
+- Case-file notebook artwork with a persistent notebook color picker
 
 ## Open
 - Accounts / per-user data (intentionally deferred: no login for now)

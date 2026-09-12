@@ -4,7 +4,7 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { MagnifierIcon } from "@/components/MysteryIcons";
+import { CaseFileIcon, MagnifierIcon } from "@/components/MysteryIcons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +41,8 @@ export const Route = createFileRoute("/notebook/$notebookId")({
         property: "og:description",
         content: "Teaching sessions for this notebook, with transcripts, questions and feedback.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: NotebookPage,
@@ -52,6 +54,15 @@ const STAGE_LABEL: Record<string, string> = {
   qa: "In questioning",
   feedback: "Feedback ready",
   learn: "Learning",
+};
+
+const NOTEBOOK_COLOR_CLASSES: Record<string, string> = {
+  gold: "text-notebook-gold",
+  crimson: "text-notebook-crimson",
+  forest: "text-notebook-forest",
+  navy: "text-notebook-navy",
+  plum: "text-notebook-plum",
+  charcoal: "text-notebook-charcoal",
 };
 
 function NotebookPage() {
@@ -100,13 +111,18 @@ function NotebookPage() {
       </Link>
 
       <header className="animate-rise-in mt-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            {notebook.data?.title ?? "Notebook"}
-          </h1>
-          {notebook.data?.subject && (
-            <p className="mt-1 text-muted-foreground">{notebook.data.subject}</p>
-          )}
+        <div className="flex items-center gap-4">
+          <CaseFileIcon
+            className={`h-14 w-14 shrink-0 ${NOTEBOOK_COLOR_CLASSES[notebook.data?.color ?? "gold"] ?? NOTEBOOK_COLOR_CLASSES["gold"]}`}
+          />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {notebook.data?.title ?? "Notebook"}
+            </h1>
+            {notebook.data?.subject && (
+              <p className="mt-1 text-muted-foreground">{notebook.data.subject}</p>
+            )}
+          </div>
         </div>
         <Button size="lg" onClick={() => setCreating(true)}>
           <Plus className="mr-1 h-4 w-4" /> New session

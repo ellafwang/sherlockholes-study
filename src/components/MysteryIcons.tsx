@@ -68,13 +68,15 @@ export function MagnifierIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/** Open notebook — the notebook card mark. */
-export function NotebookIcon(props: SVGProps<SVGSVGElement>) {
+/** Detective case folder — the notebook/case-file mark. */
+export function CaseFileIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 32 32" fill="none" aria-hidden {...props}>
-      <path d="M16 8C13 5.5 8.5 5 4 6v19c4.5-1 9 -.5 12 2V8Z" fill="var(--parchment)" stroke="currentColor" strokeWidth="2" />
-      <path d="M16 8c3-2.5 7.5-3 12-2v19c-4.5-1-9-.5-12 2V8Z" fill="var(--gold)" stroke="currentColor" strokeWidth="2" />
-      <path d="M16 8v19" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h7l2.3 2.8H27A2 2 0 0 1 29 11v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8.5Z" fill="currentColor" />
+      <path d="M3 12h26v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V12Z" fill="currentColor" stroke="var(--ink)" strokeWidth="1.5" />
+      <path d="M8 15.5h16v8H8z" fill="var(--parchment)" stroke="var(--ink)" strokeWidth="1.3" />
+      <path d="M11 18h10M11 21h7" stroke="var(--ink)" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="24.2" cy="8.8" r="2.7" fill="var(--gold)" stroke="var(--ink)" strokeWidth="1.2" />
     </svg>
   );
 }
