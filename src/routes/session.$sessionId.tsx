@@ -707,6 +707,11 @@ function SessionPage() {
 
       // Decode base64 into a real audio blob: long data: URIs are rejected or
       // silently dropped by some browsers, a blob URL always plays.
+      if (!result.audio) {
+        audioCacheRef.current.delete(spoken.slice(0, 3500));
+        setVoiceNotice("Sherlock's voice didn't come through.");
+        return;
+      }
       const binary = atob(result.audio);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
