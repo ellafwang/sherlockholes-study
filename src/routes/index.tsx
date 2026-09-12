@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createNotebook, deleteNotebook, listNotebooks, type Notebook } from "@/lib/db";
+import { createNotebook, deleteNotebook, listNotebooks, updateNotebook, type Notebook } from "@/lib/db";
 
 const NOTEBOOK_COLORS = [
   { value: "gold", label: "Gold", className: "bg-notebook-gold" },
@@ -70,6 +70,32 @@ function Dashboard() {
   const [subject, setSubject] = useState("");
   const [color, setColor] = useState("gold");
   const [pendingDelete, setPendingDelete] = useState<Notebook | null>(null);
+  const [editing, setEditing] = useState<Notebook | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editSubject, setEditSubject] = useState("");
+  const [editColor, setEditColor] = useState("gold");
+
+  const openEditor = (notebook: Notebook) => {
+    setEditing(notebook);
+    setEditTitle(notebook.title);
+    setEditSubject(notebook.subject ?? "");
+    setEditColor(notebook.color ?? "gold");
+  };
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateNotebook(editing!.id, {
+        title: editTitle.trim(),
+        subject: editSubject.trim() || null,
+        color: editColor,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notebooks"] });
+      setEditing(null);
+      toast.success("Notebook updated");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const create = useMutation({
     mutationFn: () => createNotebook(title.trim(), subject.trim() || null, color),
@@ -154,15 +180,26 @@ function Dashboard() {
                 )}
                 <p className="label-caps mt-4 text-brass">Open case →</p>
               </Link>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Delete ${notebook.title}`}
-                className="absolute right-2 top-2 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-                onClick={() => setPendingDelete(notebook)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Edit ${notebook.title}`}
+                  className="text-muted-foreground"
+                  onClick={() => openEditor(notebook)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete ${notebook.title}`}
+                  className="text-muted-foreground"
+                  onClick={() => setPendingDelete(notebook)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -226,6 +263,67 @@ function Dashboard() {
             </Button>
             <Button disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>
               {create.isPending ? "Opening…" : "Create notebook"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit notebook</DialogTitle>
+            <DialogDescription>Change the subject, description or color.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-notebook-title">Subject</Label>
+              <Input
+                id="edit-notebook-title"
+                value={editTitle}
+                autoFocus
+                onChange={(event) => setEditTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && editTitle.trim()) save.mutate();
+                }}
+              />
+            </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Notebook color</legend>
+              <div className="flex flex-wrap gap-3">
+                {NOTEBOOK_COLORS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label={option.label}
+                    aria-pressed={editColor === option.value}
+                    title={option.label}
+                    className={`h-10 w-10 rounded-full p-1.5 ${
+                      editColor === option.value ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
+                    }`}
+                    onClick={() => setEditColor(option.value)}
+                  >
+                    <span aria-hidden className={`h-full w-full rounded-full border border-foreground/20 ${option.className}`} />
+                  </Button>
+                ))}
+              </div>
+            </fieldset>
+            <div className="space-y-2">
+              <Label htmlFor="edit-notebook-subject">Brief Description (optional)</Label>
+              <Input
+                id="edit-notebook-subject"
+                value={editSubject}
+                onChange={(event) => setEditSubject(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button disabled={!editTitle.trim() || save.isPending} onClick={() => save.mutate()}>
+              {save.isPending ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
