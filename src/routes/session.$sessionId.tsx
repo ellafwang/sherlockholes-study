@@ -14,6 +14,7 @@ import { QaPanel, verdictOf } from "@/components/session/QaPanel";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useMicLevels } from "@/hooks/useMicLevels";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
   addLearnMessage,
@@ -72,6 +73,7 @@ function SessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const speech = useSpeechRecognition();
+  const micLevels = useMicLevels(speech.listening);
 
   const gradeBlurtFn = useServerFn(gradeBlurt);
   const gradeAnswerFn = useServerFn(gradeAnswer);
@@ -119,6 +121,12 @@ function SessionPage() {
     () => (segments.data ?? []).map((segment) => segment.transcript).join(" "),
     [segments.data],
   );
+
+  /* ---------- words spoken so far ---------- */
+  const spokenWords = useMemo(() => {
+    const all = `${transcriptSoFar} ${speech.finalText} ${speech.interimText}`.trim();
+    return all ? all.split(/\s+/).length : 0;
+  }, [transcriptSoFar, speech.finalText, speech.interimText]);
 
   /* ---------- countdown ---------- */
   useEffect(() => {
@@ -245,6 +253,20 @@ function SessionPage() {
   const resumeTeaching = () => {
     setRunning(true);
     if (speech.supported) speech.start();
+  };
+
+  /**
+   * The recorder button: starting it listens (and keeps the clock running),
+   * stopping it hands everything captured so far to Sherlock.
+   */
+  const toggleRecorder = () => {
+    if (speech.listening) {
+      speech.stop();
+      if (stage === "teach" && panel === "none") void flushRemaining();
+      return;
+    }
+    speech.start();
+    if (stage === "teach" && panel === "none" && remaining > 0) setRunning(true);
   };
 
   /* ---------- auto-finish when time is up ---------- */
@@ -588,13 +610,17 @@ function SessionPage() {
               listening={speech.listening}
               speaking={speech.speaking}
               disabled={!speech.supported}
-              onToggle={() => (speech.listening ? speech.stop() : speech.start())}
+              onToggle={toggleRecorder}
+              levels={micLevels}
+              wordCount={spokenWords}
               label={
                 !speech.supported
                   ? "Mic unavailable"
                   : grading
                     ? "Sherlock is following"
-                    : undefined
+                    : speech.listening
+                      ? undefined
+                      : "Tap to speak"
               }
             />
           </div>
