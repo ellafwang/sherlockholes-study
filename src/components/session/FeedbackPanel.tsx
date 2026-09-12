@@ -70,7 +70,9 @@ export function FeedbackPanel({
       ) : (
         <div className="mt-4 grid flex-1 gap-5 overflow-y-auto sm:grid-cols-[1fr_auto]">
           <div className="space-y-5 pr-1">
-            <p className="text-lg leading-snug">{report.narrative}</p>
+            <p className="text-lg leading-snug">
+              <MathText>{report.narrative}</MathText>
+            </p>
 
             <div className="flex flex-wrap gap-6 border-y border-border py-3">
               <div>
