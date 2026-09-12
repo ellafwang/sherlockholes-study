@@ -1087,7 +1087,7 @@ function SessionPage() {
                 value={typedBlurt}
                 onValueChange={setTypedBlurt}
                 placeholder="Explain it here…"
-                className="mt-2 min-h-24"
+                className="min-h-24"
                 wrapperClassName="mt-2"
               />
               <Button
