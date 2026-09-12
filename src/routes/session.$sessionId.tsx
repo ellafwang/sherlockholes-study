@@ -440,20 +440,26 @@ function SessionPage() {
     }
     setReportBusy(true);
     try {
-      const rows = segments.data ?? [];
-      const turns = qaTurns.data ?? [];
+      // Read straight from the database: anything just spoken may not be in the
+      // cached lists yet, and the report must be built from the real transcript.
+      const [rows, turns, allQuestions] = await Promise.all([
+        listSegments(sessionId),
+        listQaTurns(sessionId),
+        listQuestions(sessionId),
+      ]);
       const subtopicTime: Record<string, number> = {};
       let speakingSeconds = 0;
       let exampleCount = 0;
-      for (const row of rows) {
+      for (const row of rows ?? []) {
         const key = row.concept?.trim() || "General";
         subtopicTime[key] = (subtopicTime[key] ?? 0) + row.duration_seconds;
         speakingSeconds += row.duration_seconds;
         exampleCount += row.example_count;
       }
-      const stillOpen = (questions.data ?? [])
+      const stillOpen = (allQuestions ?? [])
         .filter((question) => question.status !== "answered")
         .map((question) => question.question);
+
 
       const result = await buildReportFn({
         data: {
