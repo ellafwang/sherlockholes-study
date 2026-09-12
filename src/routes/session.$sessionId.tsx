@@ -720,15 +720,10 @@ function SessionPage() {
   /* the feedback summary is read aloud as soon as the report is ready */
   useEffect(() => {
     if (panel !== "feedback" || reportBusy || !report) return;
-    const lines = [
-      report.narrative,
-      report.covered.length ? `You covered ${report.covered.join(", ")}.` : "",
-      report.answeredWell.length ? `You answered well on ${report.answeredWell.join(", ")}.` : "",
-      report.gaps.length ? `Still shaky: ${report.gaps.join(", ")}.` : "",
-      report.openQuestions.length ? `Open questions: ${report.openQuestions.join(" ")}` : "",
-      `You spoke for ${Math.round(report.speakingSeconds)} seconds and gave ${report.exampleCount} examples.`,
-    ].filter(Boolean);
-    speakOnce(`report:${sessionId}:${report.narrative.slice(0, 40)}`, lines.join(" "));
+    speakOnce(
+      `report:${sessionId}:${report.narrative.slice(0, 40)}`,
+      reportSpeechText(report),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, reportBusy, report]);
 
