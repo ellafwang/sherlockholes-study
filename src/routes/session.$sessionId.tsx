@@ -352,6 +352,7 @@ function SessionPage() {
     speech.reset();
     setPanel("qa");
     setVerdict("neutral");
+    setReaction(null);
     if (stage !== "qa") {
       await updateSession(sessionId, { stage: "qa" });
       queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
