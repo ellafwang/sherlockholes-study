@@ -1002,7 +1002,14 @@ function SessionPage() {
             </p>
           )}
 
-          {panel === "none" && speech.supported && (
+          {speakingLocked && panel === "none" && (
+            <p className="mt-4 max-w-md text-center text-sm text-muted-foreground">
+              This session's feedback is complete — the case is closed. Review the report on
+              the right, or start a new session from the notebook to keep practicing.
+            </p>
+          )}
+
+          {panel === "none" && speech.supported && !speakingLocked && (
             <button
               type="button"
               onClick={() => setShowTyping((value) => !value)}
@@ -1012,7 +1019,7 @@ function SessionPage() {
             </button>
           )}
 
-          {(!speech.supported || showTyping) && panel === "none" && (
+          {(!speech.supported || showTyping) && panel === "none" && !speakingLocked && (
             <div className="mt-5 w-full max-w-xl">
               <p className="text-sm text-muted-foreground">
                 Type what you'd say instead — Sherlock reacts the
