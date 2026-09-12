@@ -102,7 +102,7 @@ function SessionPage() {
   const [showTyping, setShowTyping] = useState(false);
   const [starting, setStarting] = useState(false);
   const [typedBlurt, setTypedBlurt] = useState("");
-  const [followUp, setFollowUp] = useState<{ question: string; questionId: string | null } | null>(null);
+  const [followUp, setFollowUp] = useState<{ question: string; questionId: string | null; concept?: string | null } | null>(null);
   const [followUpDepth, setFollowUpDepth] = useState(0);
   const [qaBusy, setQaBusy] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -364,7 +364,7 @@ function SessionPage() {
     [questions.data],
   );
   const activeQuestion = followUp ?? (pendingQuestions[0]
-    ? { question: pendingQuestions[0].question, questionId: pendingQuestions[0].id }
+    ? { question: pendingQuestions[0].question, questionId: pendingQuestions[0].id as string | null, concept: pendingQuestions[0].concept }
     : null);
 
   const openQa = async () => {
@@ -463,6 +463,22 @@ function SessionPage() {
     if (activeQuestion.questionId) {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
+    }
+    // "I don't know" means this must be addressed in Learn from Sherlock:
+    // record the question's topic so it lands in the feedback lesson plan.
+    const topic = (activeQuestion.concept?.trim() || activeQuestion.question).trim();
+    if (topic) {
+      const existing = new Set(
+        ((await listLearnTopics(sessionId)) ?? []).map((row) =>
+          row.topic.trim().toLowerCase(),
+        ),
+      );
+      if (!existing.has(topic.toLowerCase())) {
+        await addLearnTopics(sessionId, [
+          { topic, detail: activeQuestion.question, origin: "skipped" },
+        ]);
+        queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
+      }
     }
     speech.reset();
   };
