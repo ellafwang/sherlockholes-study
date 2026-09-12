@@ -87,13 +87,21 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     form.append("model", "google/gemini-3.5-transcribe");
     // Pin the language explicitly — never rely on auto-detection.
     form.append("language", toGeminiLanguage(data.languageCode));
-    if (keyterms.length > 0) {
-      // Bias the model towards the session's own jargon, acronyms and names.
-      form.append(
-        "prompt",
-        `Transcribe this audio accurately. Expected vocabulary and terminology: ${keyterms.join(", ")}.`,
-      );
-    }
+    // Tell the model to write only what it actually heard. Without this it fills
+    // unclear or near-silent audio with plausible-sounding invented sentences.
+    form.append(
+      "prompt",
+      [
+        "Transcribe the spoken English word for word, exactly as heard.",
+        "Do not guess, complete, correct, paraphrase or add any words that were not clearly spoken.",
+        "If the audio is silence, background noise, or unintelligible, return an empty transcript.",
+        keyterms.length > 0
+          ? `Expected vocabulary and terminology: ${keyterms.join(", ")}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
       method: "POST",
