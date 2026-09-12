@@ -25,9 +25,9 @@ function List({ title, items, empty }: { title: string; items: string[]; empty: 
     <div>
       <h4 className="label-caps">{title}</h4>
       {items.length === 0 ? (
-        <p className="mt-1 text-sm text-muted-foreground">{empty}</p>
+        <p className="mt-1 text-base text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="mt-1 space-y-1 text-[0.95rem]">
+        <ul className="mt-1 space-y-1 text-[1.05rem]">
           {items.map((item, index) => (
             <li key={`${item}-${index}`} className="flex gap-2">
               <span className="text-gold">•</span>
@@ -70,7 +70,7 @@ export function FeedbackPanel({
       ) : (
         <div className="mt-4 grid flex-1 gap-5 overflow-y-auto sm:grid-cols-[1fr_auto]">
           <div className="space-y-5 pr-1">
-            <p className="text-[1.02rem] leading-snug">{report.narrative}</p>
+            <p className="text-lg leading-snug">{report.narrative}</p>
 
             <div className="flex flex-wrap gap-6 border-y border-border py-3">
               <div>
@@ -95,7 +95,7 @@ export function FeedbackPanel({
             />
             <List
               title="Questions Sherlock still has"
-              items={report.openQuestions}
+              items={report.openQuestions.slice(0, 4)}
               empty="None — he's satisfied."
             />
             <List
@@ -107,7 +107,7 @@ export function FeedbackPanel({
             <div>
               <h4 className="label-caps">Time per subtopic</h4>
               {Object.keys(report.subtopicTime).length === 0 ? (
-                <p className="mt-1 text-sm text-muted-foreground">No subtopics tracked.</p>
+                <p className="mt-1 text-base text-muted-foreground">No subtopics tracked.</p>
               ) : (
                 <ul className="mt-2 space-y-2">
                   {Object.entries(report.subtopicTime)
@@ -116,7 +116,7 @@ export function FeedbackPanel({
                       const total = Math.max(report.speakingSeconds, 1);
                       return (
                         <li key={topic}>
-                          <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-base">
                             <span>{topic}</span>
                             <span className="text-muted-foreground">{mmss(seconds)}</span>
                           </div>
