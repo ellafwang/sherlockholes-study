@@ -846,8 +846,9 @@ function SessionPage() {
                   const chunk = typedBlurt.trim();
                   setTypedBlurt("");
                   const at = lastGradeAt.current;
-                  lastGradeAt.current = elapsed;
-                  void gradeChunk(chunk, at, Math.max(1, elapsed - at));
+                  const now = elapsedRef.current;
+                  lastGradeAt.current = now;
+                  void gradeChunk(chunk, at, Math.max(1, now - at));
                 }}
               >
                 Send to Sherlock
