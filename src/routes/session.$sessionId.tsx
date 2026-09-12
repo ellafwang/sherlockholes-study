@@ -278,6 +278,7 @@ function SessionPage() {
       lastGradeAt.current = 0;
       speech.reset();
       setVerdict("neutral");
+      setReaction(null);
       setRunning(true);
       if (speech.supported) speech.start();
     } catch (error) {
