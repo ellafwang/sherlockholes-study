@@ -16,6 +16,8 @@ import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
 import { MathTextarea } from "@/components/MathTextarea";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { Input } from "@/components/ui/input";
+import { TranscriptView, TRANSCRIPT_LANGUAGES } from "@/components/session/TranscriptView";
 import {
   addLearnMessage,
   addLearnTopics,
@@ -93,7 +95,18 @@ function SessionPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const speech = useSpeechRecognition();
+  const [languageCode, setLanguageCode] = useState("eng");
+  const [vocabulary, setVocabulary] = useState("");
+  const keyterms = useMemo(
+    () =>
+      vocabulary
+        .split(/[,\n]/)
+        .map((term) => term.trim())
+        .filter(Boolean)
+        .slice(0, 100),
+    [vocabulary],
+  );
+  const speech = useSpeechRecognition({ languageCode, keyterms });
 
   const gradeBlurtFn = useServerFn(gradeBlurt);
   const gradeAnswerFn = useServerFn(gradeAnswer);
@@ -1047,11 +1060,42 @@ function SessionPage() {
             </div>
           )}
 
-          {(speech.interimText || speech.finalText) && panel === "none" && (
-            <p className="mt-5 max-h-32 max-w-xl overflow-y-auto text-center text-sm leading-snug text-muted-foreground">
-              {speech.finalText.slice(-400)}
-              <span className="text-foreground">{speech.interimText}</span>
-            </p>
+          {panel === "none" && !speakingLocked && (
+            <div className="mx-auto mt-5 grid w-full max-w-xl gap-3 text-left sm:grid-cols-2">
+              <label className="block">
+                <span className="label-caps text-muted-foreground">Spoken language</span>
+                <select
+                  value={languageCode}
+                  onChange={(event) => setLanguageCode(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {TRANSCRIPT_LANGUAGES.map((language) => (
+                    <option key={language.code} value={language.code}>
+                      {language.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="label-caps text-muted-foreground">Context / vocabulary</span>
+                <Input
+                  value={vocabulary}
+                  onChange={(event) => setVocabulary(event.target.value)}
+                  placeholder="eigenvector, ATP, Dr. Nguyen"
+                  className="mt-1"
+                />
+              </label>
+            </div>
+          )}
+
+          {panel === "none" && (
+            <div className="mt-4 w-full">
+              <TranscriptView
+                turns={speech.turns}
+                events={speech.events}
+                live={speech.interimText}
+              />
+            </div>
           )}
 
           {panel === "none" && speech.error && (
