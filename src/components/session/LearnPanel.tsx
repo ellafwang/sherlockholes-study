@@ -91,6 +91,18 @@ export function LearnPanel({
         </>
       )}
 
+      {(speaking || voiceLoading) && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-brass" aria-live="polite">
+          <Volume2 className={`h-4 w-4 ${speaking ? "animate-pulse" : ""}`} />
+          <span>{voiceLoading ? "Sherlock is clearing his throat…" : "Sherlock is speaking…"}</span>
+          {speaking && (
+            <button type="button" onClick={onStopVoice} className="label-caps text-brass hover:underline">
+              Stop
+            </button>
+          )}
+        </div>
+      )}
+
       {voiceNotice && <p className="mt-3 text-sm text-muted-foreground">{voiceNotice}</p>}
 
       <div ref={logRef} className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1">
