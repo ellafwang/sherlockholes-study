@@ -5,7 +5,9 @@ const speakSchema = z.object({ text: z.string().min(1).max(4000) });
 
 const listenSchema = z.object({
   audio: z.string().min(16),
-  mimeType: z.string().min(3).max(80).default("audio/webm"),
+  mimeType: z
+    .enum(["audio/wav", "audio/webm", "audio/webm;codecs=opus", "audio/mp4", "audio/ogg", "audio/ogg;codecs=opus"])
+    .default("audio/webm"),
 });
 
 export type ListenResult =
@@ -26,10 +28,35 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     }
 
     const bytes = Buffer.from(data.audio, "base64");
+    if (bytes.byteLength < 2_048) {
+      return {
+        ok: false,
+        reason: "failed",
+        message: "That recording was empty — please try speaking again.",
+      };
+    }
+    if (bytes.byteLength > 24 * 1024 * 1024) {
+      return {
+        ok: false,
+        reason: "failed",
+        message: "That recording was too large — please record a shorter answer.",
+      };
+    }
+
+    const baseMimeType = data.mimeType.split(";")[0];
+    const extension =
+      baseMimeType === "audio/wav"
+        ? "wav"
+        : baseMimeType === "audio/mp4"
+          ? "mp4"
+          : baseMimeType === "audio/ogg"
+            ? "ogg"
+            : "webm";
     const form = new FormData();
-    form.append("file", new Blob([bytes], { type: data.mimeType }), "blurt.webm");
+    form.append("file", new Blob([bytes], { type: data.mimeType }), `blurt.${extension}`);
     form.append("model_id", "scribe_v2");
-    form.append("language_code", "eng");
+    form.append("tag_audio_events", "false");
+    form.append("diarize", "false");
 
     const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
       method: "POST",
@@ -40,10 +67,18 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       console.error(`ElevenLabs STT error [${response.status}]: ${detail}`);
+      const providerMessage = (() => {
+        try {
+          const parsed = JSON.parse(detail) as { detail?: { message?: string }; message?: string };
+          return parsed.detail?.message ?? parsed.message;
+        } catch {
+          return undefined;
+        }
+      })();
       return {
         ok: false,
         reason: "failed",
-        message: "That clip didn't come through. Keep talking, or type instead.",
+        message: providerMessage || "That clip didn't come through. Please try speaking again.",
       };
     }
 
@@ -51,8 +86,7 @@ export const transcribeSpeech = createServerFn({ method: "POST" })
     return { ok: true, text: (body.text ?? "").trim() };
   });
 
-// George — a measured, British-sounding narrator voice for Sherlock.
-const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+const VOICE_ID = "7EzWGsX10sAS4c9m9cPf";
 
 export type SpeakResult =
   | { ok: true; audio: string }

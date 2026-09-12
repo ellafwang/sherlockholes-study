@@ -14,7 +14,6 @@ import { QaPanel, verdictOf } from "@/components/session/QaPanel";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useMicLevels } from "@/hooks/useMicLevels";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
   addLearnMessage,
@@ -73,7 +72,6 @@ function SessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const speech = useSpeechRecognition();
-  const micLevels = useMicLevels(speech.listening);
 
   const gradeBlurtFn = useServerFn(gradeBlurt);
   const gradeAnswerFn = useServerFn(gradeAnswer);
@@ -265,10 +263,10 @@ function SessionPage() {
     }
   };
 
-  const pauseTeaching = () => {
+  const pauseTeaching = async () => {
     setRunning(false);
-    speech.stop();
-    void flushRemaining();
+    await speech.stop();
+    await flushRemaining();
   };
 
   const resumeTeaching = () => {
@@ -280,10 +278,10 @@ function SessionPage() {
    * The recorder button: starting it listens (and keeps the clock running),
    * stopping it hands everything captured so far to Sherlock.
    */
-  const toggleRecorder = () => {
+  const toggleRecorder = async () => {
     if (speech.listening) {
-      speech.stop();
-      if (stage === "teach" && panel === "none") void flushRemaining();
+      await speech.stop();
+      if (stage === "teach" && panel === "none") await flushRemaining();
       return;
     }
     speech.start();
@@ -294,8 +292,7 @@ function SessionPage() {
   useEffect(() => {
     if (!running || remaining > 0) return;
     setRunning(false);
-    speech.stop();
-    void flushRemaining().then(() => {
+    void speech.stop().then(flushRemaining).then(() => {
       toast.info("Time's up — Sherlock has questions.");
       openQa();
     });
@@ -313,7 +310,8 @@ function SessionPage() {
 
   const openQa = async () => {
     setRunning(false);
-    speech.stop();
+    await speech.stop();
+    if (stage === "teach") await flushRemaining();
     speech.reset();
     setPanel("qa");
     setVerdict("neutral");
@@ -326,7 +324,7 @@ function SessionPage() {
   const submitAnswer = async (answer: string) => {
     if (!activeQuestion || !session.data) return;
     setQaBusy(true);
-    speech.stop();
+    await speech.stop();
     try {
       await addQaTurn({
         session_id: sessionId,
@@ -414,7 +412,7 @@ function SessionPage() {
 
   const openFeedback = async () => {
     setPanel("feedback");
-    speech.stop();
+    await speech.stop();
     setRunning(false);
     if (!session.data) return;
     if (stage !== "feedback" && stage !== "learn") {
@@ -703,13 +701,15 @@ function SessionPage() {
               speaking={speech.speaking}
               disabled={!speech.supported}
               onToggle={toggleRecorder}
-              levels={micLevels}
+              levels={speech.levels}
               wordCount={spokenWords}
               label={
                 !speech.supported
                   ? "Mic unavailable"
                   : grading
                     ? "Sherlock is following"
+                    : speech.transcribing
+                      ? "Transcribing your voice…"
                     : speech.listening
                       ? undefined
                       : "Tap to speak"
@@ -765,6 +765,12 @@ function SessionPage() {
             <p className="mt-5 max-h-32 max-w-xl overflow-y-auto text-center text-sm leading-snug text-muted-foreground">
               {speech.finalText.slice(-400)}
               <span className="text-foreground">{speech.interimText}</span>
+            </p>
+          )}
+
+          {panel === "none" && speech.error && (
+            <p role="alert" className="mt-3 max-w-md text-center text-sm text-verdict-red">
+              {speech.error}
             </p>
           )}
 
@@ -847,8 +853,11 @@ function SessionPage() {
               liveText={`${speech.finalText}${speech.interimText}`}
               listening={speech.listening}
               micSupported={speech.supported}
-              onToggleMic={() => (speech.listening ? speech.stop() : speech.start())}
-              onSubmit={submitAnswer}
+              onToggleMic={() => (speech.listening ? void speech.stop() : speech.start())}
+              onSubmit={async (answer) => {
+                const captured = speech.listening ? await speech.stop() : "";
+                await submitAnswer(captured || answer);
+              }}
               onSkip={skipQuestion}
               onBack={() => setPanel("none")}
               onFinish={openFeedback}

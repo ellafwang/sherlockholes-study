@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { transcribeSpeech } from "@/lib/voice.functions";
 
-/* How long each recorded clip is before it is sent off for transcription. */
+/* How long each complete WAV clip is before it is sent for transcription. */
 const CLIP_MS = 4500;
+const WAVEFORM_BARS = 28;
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -36,12 +37,6 @@ function getRecognition(): SpeechRecognitionLike | null {
   return Ctor ? new Ctor() : null;
 }
 
-function pickMimeType(): string {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
-  if (typeof MediaRecorder === "undefined") return "";
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
-}
-
 async function toBase64(blob: Blob): Promise<string> {
   const reader = new FileReader();
   return new Promise((resolve, reject) => {
@@ -54,6 +49,50 @@ async function toBase64(blob: Blob): Promise<string> {
   });
 }
 
+function encodeWav(chunks: Float32Array[], inputRate: number): Blob {
+  const outputRate = 16_000;
+  const inputLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const input = new Float32Array(inputLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    input.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.max(0, Math.floor(input.length / ratio));
+  const samples = new Int16Array(outputLength);
+  for (let i = 0; i < outputLength; i += 1) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+    let sum = 0;
+    for (let j = start; j < end; j += 1) sum += input[j] ?? 0;
+    const sample = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
+    samples[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+
+  const buffer = new ArrayBuffer(44 + samples.byteLength);
+  const view = new DataView(buffer);
+  const write = (at: number, value: string) => {
+    for (let i = 0; i < value.length; i += 1) view.setUint8(at + i, value.charCodeAt(i));
+  };
+  write(0, "RIFF");
+  view.setUint32(4, 36 + samples.byteLength, true);
+  write(8, "WAVE");
+  write(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, outputRate, true);
+  view.setUint32(28, outputRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, "data");
+  view.setUint32(40, samples.byteLength, true);
+  new Int16Array(buffer, 44).set(samples);
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
 export type SpeechState = {
   supported: boolean;
   listening: boolean;
@@ -63,9 +102,12 @@ export type SpeechState = {
   interimText: string;
   /** True while the student's voice is actually coming through. */
   speaking: boolean;
+  transcribing: boolean;
+  levels: number[];
   error: string | null;
   start: () => void;
-  stop: () => void;
+  /** Stops recording, waits for the final clip, and returns all unconsumed speech. */
+  stop: () => Promise<string>;
   reset: () => void;
   /** Returns everything captured since the last call, and marks it consumed. */
   drain: () => string;
@@ -85,21 +127,27 @@ export function useSpeechRecognition(): SpeechState {
   const [finalText, setFinalText] = useState("");
   const [interimText, setInterimText] = useState("");
   const [speaking, setSpeaking] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [levels, setLevels] = useState<number[]>(() => new Array(WAVEFORM_BARS).fill(0));
   const [error, setError] = useState<string | null>(null);
 
   const wantsListeningRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmRef = useRef<Float32Array[]>([]);
   const cycleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const consumedRef = useRef(0);
   const finalRef = useRef("");
   const speakingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTranscriptionsRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     setSupported(
       typeof window !== "undefined" &&
-        typeof MediaRecorder !== "undefined" &&
+        !!(window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) &&
         !!navigator.mediaDevices?.getUserMedia,
     );
   }, []);
@@ -111,51 +159,52 @@ export function useSpeechRecognition(): SpeechState {
   }, []);
 
   const sendClip = useCallback(
-    async (blob: Blob, mimeType: string) => {
+    (blob: Blob, mimeType: string) => {
       if (blob.size < 4000) return; // near-silence or an empty container
-      try {
-        const audio = await toBase64(blob);
-        const result = await transcribe({ data: { audio, mimeType: mimeType || "audio/webm" } });
-        if (!result.ok) {
-          setError(result.message);
-          return;
-        }
-        const text = result.text.trim();
-        if (!text) return;
-        setError(null);
-        finalRef.current = `${finalRef.current}${text} `;
-        setFinalText(finalRef.current);
-        setInterimText("");
-        markSpeaking();
-      } catch (cause) {
-        console.error(cause);
-        setError("Transcription hiccuped. Keep talking, or type your explanation instead.");
-      }
+      setTranscribing(true);
+      pendingTranscriptionsRef.current = pendingTranscriptionsRef.current
+        .then(async () => {
+          const audio = await toBase64(blob);
+          const result = await transcribe({ data: { audio, mimeType: mimeType || "audio/webm" } });
+          if (!result.ok) {
+            setError(result.message);
+            return;
+          }
+          const text = result.text.trim();
+          if (!text) return;
+          setError(null);
+          finalRef.current = `${finalRef.current}${text} `;
+          setFinalText(finalRef.current);
+          setInterimText("");
+          markSpeaking();
+        })
+        .catch((cause) => {
+          console.error(cause);
+          setError("Transcription hiccuped. Please try speaking again, or type your explanation.");
+        })
+        .finally(() => {
+          setTranscribing(false);
+        });
     },
     [markSpeaking, transcribe],
   );
 
-  /* Records back-to-back standalone clips so each one can be transcribed on its own. */
-  const runCycle = useCallback(() => {
-    const stream = streamRef.current;
-    if (!stream || !wantsListeningRef.current) return;
-    const mimeType = pickMimeType();
-    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    recorderRef.current = recorder;
-    const parts: Blob[] = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) parts.push(event.data);
-    };
-    recorder.onstop = () => {
-      const type = recorder.mimeType || mimeType || "audio/webm";
-      if (parts.length > 0) void sendClip(new Blob(parts, { type }), type);
-      if (wantsListeningRef.current) runCycle();
-    };
-    recorder.start();
-    cycleTimer.current = setTimeout(() => {
-      if (recorder.state !== "inactive") recorder.stop();
-    }, CLIP_MS);
+  const flushPcm = useCallback(() => {
+    const context = audioContextRef.current;
+    const chunks = pcmRef.current;
+    pcmRef.current = [];
+    if (!context || chunks.length === 0) return;
+    const blob = encodeWav(chunks, context.sampleRate);
+    if (blob.size >= 2_048) sendClip(blob, "audio/wav");
   }, [sendClip]);
+
+  const scheduleFlush = useCallback(() => {
+    if (!wantsListeningRef.current) return;
+    cycleTimer.current = setTimeout(() => {
+      flushPcm();
+      scheduleFlush();
+    }, CLIP_MS);
+  }, [flushPcm]);
 
   const startCaptions = useCallback(() => {
     const instance = getRecognition();
@@ -191,19 +240,15 @@ export function useSpeechRecognition(): SpeechState {
     }
   }, [markSpeaking]);
 
-  const teardown = useCallback(() => {
+  const teardown = useCallback((): Promise<void> => {
     wantsListeningRef.current = false;
     if (cycleTimer.current) clearTimeout(cycleTimer.current);
     cycleTimer.current = null;
-    const recorder = recorderRef.current;
-    recorderRef.current = null;
-    if (recorder && recorder.state !== "inactive") {
-      try {
-        recorder.stop();
-      } catch {
-        /* already stopped */
-      }
-    }
+    flushPcm();
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+    sourceRef.current?.disconnect();
+    sourceRef.current = null;
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
     if (recognition) {
@@ -217,9 +262,14 @@ export function useSpeechRecognition(): SpeechState {
     }
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    const context = audioContextRef.current;
+    audioContextRef.current = null;
+    if (context) void context.close().catch(() => undefined);
     setInterimText("");
     setSpeaking(false);
-  }, []);
+    setLevels(new Array(WAVEFORM_BARS).fill(0));
+    return pendingTranscriptionsRef.current;
+  }, [flushPcm]);
 
   const start = useCallback(() => {
     if (wantsListeningRef.current) return;
@@ -236,7 +286,29 @@ export function useSpeechRecognition(): SpeechState {
           return;
         }
         streamRef.current = stream;
-        runCycle();
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!Ctor) throw new Error("Audio recording is not supported in this browser.");
+        const context = new Ctor();
+        await context.resume();
+        const source = context.createMediaStreamSource(stream);
+        const processor = context.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (event) => {
+          const samples = new Float32Array(event.inputBuffer.getChannelData(0));
+          pcmRef.current.push(samples);
+          let energy = 0;
+          for (let i = 0; i < samples.length; i += 1) energy += (samples[i] ?? 0) ** 2;
+          const level = Math.min(1, Math.sqrt(energy / samples.length) * 4);
+          setLevels((current) => [...current.slice(1), level]);
+          if (level > 0.048) markSpeaking();
+        };
+        source.connect(processor);
+        processor.connect(context.destination);
+        audioContextRef.current = context;
+        sourceRef.current = source;
+        processorRef.current = processor;
+        scheduleFlush();
         startCaptions();
       } catch (cause) {
         console.error(cause);
@@ -245,11 +317,13 @@ export function useSpeechRecognition(): SpeechState {
         setError("Microphone access was blocked. Allow the mic, or type your explanation instead.");
       }
     })();
-  }, [runCycle, startCaptions]);
+  }, [markSpeaking, scheduleFlush, startCaptions]);
 
-  const stop = useCallback(() => {
-    teardown();
+  const stop = useCallback(async () => {
+    await teardown();
     setListening(false);
+    const fresh = finalRef.current.slice(consumedRef.current);
+    return fresh.trim();
   }, [teardown]);
 
   const reset = useCallback(() => {
@@ -267,7 +341,7 @@ export function useSpeechRecognition(): SpeechState {
 
   useEffect(
     () => () => {
-      teardown();
+      void teardown();
       if (speakingTimer.current) clearTimeout(speakingTimer.current);
     },
     [teardown],
@@ -279,6 +353,8 @@ export function useSpeechRecognition(): SpeechState {
     finalText,
     interimText,
     speaking,
+    transcribing,
+    levels,
     error,
     start,
     stop,
