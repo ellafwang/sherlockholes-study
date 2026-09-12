@@ -59,8 +59,8 @@ export const Route = createFileRoute("/session/$sessionId")({
   component: SessionPage,
 });
 
-// Sherlock should visibly react while you talk, so judge short stretches often.
-const GRADE_EVERY_MS = 6000;
+// Sherlock listens and judges every second, so his face tracks what you say.
+const GRADE_EVERY_MS = 1000;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
