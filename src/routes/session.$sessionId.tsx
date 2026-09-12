@@ -446,12 +446,20 @@ function SessionPage() {
     }
   };
 
+  const SKIP_REPLIES = [
+    "I'll note that as an open question.",
+    "Let's park that one for now.",
+    "We'll circle back to that.",
+    "That's one to review later.",
+    "Moving on — we can return to this.",
+  ];
+
   const skipQuestion = async () => {
     if (!activeQuestion) return;
     setFollowUp(null);
     setFollowUpDepth(0);
     setVerdict("yellow");
-    setReaction("I still don't understand that one — let's come back to it.");
+    setReaction(SKIP_REPLIES[Math.floor(Math.random() * SKIP_REPLIES.length)] ?? SKIP_REPLIES[0]);
     if (activeQuestion.questionId) {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
