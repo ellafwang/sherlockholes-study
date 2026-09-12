@@ -59,7 +59,8 @@ export const Route = createFileRoute("/session/$sessionId")({
   component: SessionPage,
 });
 
-const GRADE_EVERY_MS = 15000;
+// Sherlock should visibly react while you talk, so judge short stretches often.
+const GRADE_EVERY_MS = 6000;
 type Panel = "none" | "qa" | "feedback" | "learn";
 
 function mmss(total: number) {
@@ -92,6 +93,7 @@ function SessionPage() {
   });
 
   const [verdict, setVerdict] = useState<Verdict>("neutral");
+  const [reaction, setReaction] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>("none");
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -169,6 +171,7 @@ function SessionPage() {
           },
         });
         setVerdict(grade.verdict);
+        setReaction(grade.note?.trim() || null);
         await addSegment({
           session_id: sessionId,
           transcript: chunk,
@@ -275,6 +278,7 @@ function SessionPage() {
       lastGradeAt.current = 0;
       speech.reset();
       setVerdict("neutral");
+      setReaction(null);
       setRunning(true);
       if (speech.supported) speech.start();
     } catch (error) {
@@ -348,6 +352,7 @@ function SessionPage() {
     speech.reset();
     setPanel("qa");
     setVerdict("neutral");
+    setReaction(null);
     if (stage !== "qa") {
       await updateSession(sessionId, { stage: "qa" });
       queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
@@ -378,6 +383,7 @@ function SessionPage() {
       });
 
       setVerdict(grade.verdict);
+      setReaction(grade.reply?.trim() || null);
       await addQaTurn({
         session_id: sessionId,
         question_id: activeQuestion.questionId,
@@ -423,6 +429,7 @@ function SessionPage() {
     setFollowUp(null);
     setFollowUpDepth(0);
     setVerdict("yellow");
+    setReaction("I still don't understand that one — let's come back to it.");
     if (activeQuestion.questionId) {
       await setQuestionStatus(activeQuestion.questionId, "missed");
       queryClient.invalidateQueries({ queryKey: ["questions", sessionId] });
@@ -662,6 +669,7 @@ function SessionPage() {
     lastGradeAt.current = 0;
     speech.reset();
     setVerdict("neutral");
+    setReaction(null);
     setRunning(true);
     if (speech.supported) speech.start();
   };
@@ -736,6 +744,25 @@ function SessionPage() {
           </div>
 
           <SherlockFace verdict={verdict} className="mt-4" />
+
+          {reaction && (
+            <p
+              aria-live="polite"
+              className="mt-2 max-w-md text-center text-base italic"
+              style={{
+                color:
+                  verdict === "green"
+                    ? "var(--verdict-green)"
+                    : verdict === "yellow"
+                      ? "var(--brass)"
+                      : verdict === "red"
+                        ? "var(--verdict-red)"
+                        : "var(--muted-foreground)",
+              }}
+            >
+              “{reaction}”
+            </p>
+          )}
 
           <div className="mt-4">
             <RecorderOrb
