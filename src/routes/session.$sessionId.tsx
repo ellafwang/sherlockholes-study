@@ -271,11 +271,13 @@ function SessionPage() {
     const chunk = speech.drain() || typedBlurt.trim();
     if (chunk) {
       const at = lastGradeAt.current;
-      lastGradeAt.current = elapsed;
-      await gradeChunk(chunk, at, Math.max(1, elapsed - at));
+      const now = elapsedRef.current;
+      lastGradeAt.current = now;
+      await gradeChunk(chunk, at, Math.max(1, now - at));
       setTypedBlurt("");
     }
   };
+
 
   const pauseTeaching = async () => {
     setRunning(false);
