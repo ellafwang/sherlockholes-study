@@ -149,7 +149,17 @@ function SessionPage() {
     return { covered, percent: Math.round((covered.length / concepts.length) * 100) };
   }, [concepts, transcriptSoFar, speech.finalText, speech.interimText, segments.data]);
 
+  /* ---------- live trail of Sherlock's judgements ---------- */
+  const recentVerdicts = useMemo<Verdict[]>(
+    () =>
+      (segments.data ?? [])
+        .slice(-10)
+        .map((segment) => (segment.verdict ?? "neutral") as Verdict),
+    [segments.data],
+  );
+
   /* ---------- countdown ---------- */
+
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => setElapsed((value) => value + 1), 1000);
