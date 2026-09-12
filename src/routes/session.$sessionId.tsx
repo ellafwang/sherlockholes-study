@@ -73,6 +73,7 @@ function SessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const speech = useSpeechRecognition();
+  const micLevels = useMicLevels(speech.listening);
 
   const gradeBlurtFn = useServerFn(gradeBlurt);
   const gradeAnswerFn = useServerFn(gradeAnswer);
@@ -120,6 +121,12 @@ function SessionPage() {
     () => (segments.data ?? []).map((segment) => segment.transcript).join(" "),
     [segments.data],
   );
+
+  /* ---------- words spoken so far ---------- */
+  const spokenWords = useMemo(() => {
+    const all = `${transcriptSoFar} ${speech.finalText} ${speech.interimText}`.trim();
+    return all ? all.split(/\s+/).length : 0;
+  }, [transcriptSoFar, speech.finalText, speech.interimText]);
 
   /* ---------- countdown ---------- */
   useEffect(() => {
