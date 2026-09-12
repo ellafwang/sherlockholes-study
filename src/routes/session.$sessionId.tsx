@@ -419,10 +419,14 @@ function SessionPage() {
         example_count: exampleCount,
         narrative: result.narrative,
       });
-      if (result.gaps.length > 0) {
+      const existing = new Set(
+        (await listLearnTopics(sessionId)).map((topic) => topic.topic.trim().toLowerCase()),
+      );
+      const fresh = result.gaps.filter((gap) => !existing.has(gap.trim().toLowerCase()));
+      if (fresh.length > 0) {
         await addLearnTopics(
           sessionId,
-          result.gaps.map((gap) => ({ topic: gap, detail: null, origin: "summary" })),
+          fresh.map((gap) => ({ topic: gap, detail: null, origin: "summary" })),
         );
         queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
       }
