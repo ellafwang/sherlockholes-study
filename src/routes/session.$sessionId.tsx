@@ -420,7 +420,9 @@ function SessionPage() {
         narrative: result.narrative,
       });
       const existing = new Set(
-        (await listLearnTopics(sessionId)).map((topic) => topic.topic.trim().toLowerCase()),
+        ((await listLearnTopics(sessionId)) ?? []).map((topic) =>
+          topic.topic.trim().toLowerCase(),
+        ),
       );
       const fresh = result.gaps.filter((gap) => !existing.has(gap.trim().toLowerCase()));
       if (fresh.length > 0) {
