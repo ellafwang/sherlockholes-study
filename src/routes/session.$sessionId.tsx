@@ -419,7 +419,7 @@ function SessionPage() {
         ]);
         queryClient.invalidateQueries({ queryKey: ["learn-topics", sessionId] });
       }
-      if (grade.followUpQuestion && followUpDepth < 2) {
+      if (grade.followUpQuestion && followUpDepth < 1) {
         setFollowUp({ question: grade.followUpQuestion, questionId: activeQuestion.questionId });
         setFollowUpDepth((depth) => depth + 1);
         await addQaTurn({
