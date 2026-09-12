@@ -520,10 +520,7 @@ function SessionPage() {
   }, [learnTopics.data, summary.data, concepts]);
 
   const taughtTopics = useMemo(() => {
-    const said = (learnMessages.data ?? [])
-      .filter((row) => row.role !== "user")
-      .map((row) => row.content.toLowerCase())
-      .join(" ");
+    const said = (learnMessages.data ?? []).map((row) => row.content.toLowerCase()).join(" ");
     return learnPlan.filter((topic) => said.includes(topic.toLowerCase()));
   }, [learnMessages.data, learnPlan]);
 
