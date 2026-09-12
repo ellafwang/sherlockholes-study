@@ -14,9 +14,12 @@ export function LearnPanel({
   nextTopic,
   busy,
   voiceNotice,
+  speaking,
+  voiceLoading,
   onSend,
   onTeachTopic,
   onReplay,
+  onStopVoice,
   onBack,
 }: {
   entries: LearnEntry[];
@@ -25,9 +28,12 @@ export function LearnPanel({
   nextTopic: string | null;
   busy: boolean;
   voiceNotice: string | null;
+  speaking: boolean;
+  voiceLoading: boolean;
   onSend: (message: string) => void;
   onTeachTopic: (topic: string) => void;
   onReplay: (text: string) => void;
+  onStopVoice: () => void;
   onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
