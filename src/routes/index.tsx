@@ -99,10 +99,11 @@ function Dashboard() {
       <header className="animate-rise-in flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <MagnifierIcon className="h-9 w-9 text-foreground" />
+            <MagnifierIcon className="h-10 w-10 text-foreground" />
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Sherlock Holes</h1>
           </div>
-          <p className="mt-3 max-w-xl text-muted-foreground">
+          <p className="mt-2 text-lg font-medium text-foreground/90">finding the gaps in your understanding.</p>
+          <p className="mt-3 max-w-xl text-base text-muted-foreground">
             Teach a topic out loud to Sherlock. Wherever he gets lost is
             a hole in what you know — and that's exactly where you'll study next.
           </p>
