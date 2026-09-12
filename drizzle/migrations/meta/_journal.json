@@ -15,6 +15,13 @@
       "when": 1789231701383,
       "tag": "0001_add_answered_well_to_summaries",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789248426498,
+      "tag": "0002_add_notebook_color",
+      "breakpoints": true
     }
   ]
 }

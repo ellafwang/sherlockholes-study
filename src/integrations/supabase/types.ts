@@ -127,6 +127,7 @@ export type Database = {
       }
       notebooks: {
         Row: {
+          color: string
           created_at: string
           id: string
           subject: string | null
@@ -134,6 +135,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          color?: string
           created_at?: string
           id?: string
           subject?: string | null
@@ -141,6 +143,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          color?: string
           created_at?: string
           id?: string
           subject?: string | null
