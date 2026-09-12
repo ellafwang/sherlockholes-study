@@ -568,8 +568,12 @@ function SessionPage() {
 
   /* ---------- learn mode ---------- */
   const stopAudio = () => {
+    pendingPlayRef.current = null;
     audioRef.current?.pause();
-    audioRef.current = null;
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
     setSpeaking(false);
   };
 
@@ -584,13 +588,42 @@ function SessionPage() {
         setVoiceNotice(result.message);
         return;
       }
-      setVoiceNotice(null);
-      const audio = new Audio(`data:audio/mpeg;base64,${result.audio}`);
+
+      // Decode base64 into a real audio blob: long data: URIs are rejected or
+      // silently dropped by some browsers, a blob URL always plays.
+      const binary = atob(result.audio);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+      audioUrlRef.current = url;
+
+      // Reuse one element so the browser keeps the gesture-granted permission.
+      const audio = audioRef.current ?? new Audio();
       audioRef.current = audio;
+      audio.src = url;
+      audio.preload = "auto";
       audio.onended = () => setSpeaking(false);
       audio.onpause = () => setSpeaking(false);
-      setSpeaking(true);
-      await audio.play();
+
+      const start = async () => {
+        setSpeaking(true);
+        await audio.play();
+        setVoiceNotice(null);
+      };
+
+      try {
+        await start();
+      } catch (error) {
+        // Autoplay policy: speech generated without a click cannot start on its
+        // own. Keep it ready and let the next tap anywhere release it.
+        if ((error as Error).name === "NotAllowedError") {
+          setSpeaking(false);
+          pendingPlayRef.current = start;
+          setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
       console.error(error);
       setSpeaking(false);
@@ -599,6 +632,22 @@ function SessionPage() {
       setVoiceLoading(false);
     }
   };
+
+  /* release any speech that autoplay blocked, on the student's next tap */
+  useEffect(() => {
+    const release = () => {
+      const pending = pendingPlayRef.current;
+      if (!pending) return;
+      pendingPlayRef.current = null;
+      void pending().catch(() => setSpeaking(false));
+    };
+    document.addEventListener("pointerdown", release);
+    document.addEventListener("keydown", release);
+    return () => {
+      document.removeEventListener("pointerdown", release);
+      document.removeEventListener("keydown", release);
+    };
+  }, []);
 
   /* the lesson plan: gaps and open questions from the report first, then the
      session's own key concepts so there is always something to be taught */
