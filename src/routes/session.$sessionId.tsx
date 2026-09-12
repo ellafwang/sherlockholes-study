@@ -192,10 +192,27 @@ function SessionPage() {
         queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
       } catch (error) {
         console.error(error);
+        // Never lose what the student said: keep the words even if grading failed,
+        // so the Q&A and the feedback report still have the real explanation.
+        try {
+          await addSegment({
+            session_id: sessionId,
+            transcript: chunk,
+            verdict: "neutral",
+            concept: null,
+            at_seconds: Math.round(at),
+            duration_seconds: Math.max(1, Math.round(duration)),
+            example_count: 0,
+          });
+          queryClient.invalidateQueries({ queryKey: ["segments", sessionId] });
+        } catch (saveError) {
+          console.error(saveError);
+        }
         toast.error((error as Error).message);
       } finally {
         setGrading(false);
       }
+
     },
     [concepts, gradeBlurtFn, notes, queryClient, session.data, sessionId, transcriptSoFar],
   );
