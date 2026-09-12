@@ -111,7 +111,7 @@ function NotebookPage() {
       <header className="animate-rise-in mt-6 flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-4">
           <CaseFileIcon
-            className={`h-14 w-14 shrink-0 ${NOTEBOOK_COLOR_CLASSES[notebook.data?.color ?? "gold"] ?? NOTEBOOK_COLOR_CLASSES.gold}`}
+            className={`h-14 w-14 shrink-0 ${NOTEBOOK_COLOR_CLASSES[notebook.data?.color ?? "gold"] ?? NOTEBOOK_COLOR_CLASSES["gold"]}`}
           />
           <div>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
