@@ -195,6 +195,16 @@ export function useSpeechRecognition(): SpeechState {
     const chunks = pcmRef.current;
     pcmRef.current = [];
     if (!context || chunks.length === 0) return;
+    // Skip clips that hold no voice at all, so silence never costs a round trip.
+    let energy = 0;
+    let count = 0;
+    for (const chunk of chunks) {
+      for (let i = 0; i < chunk.length; i += 1) {
+        energy += (chunk[i] ?? 0) ** 2;
+        count += 1;
+      }
+    }
+    if (count === 0 || Math.sqrt(energy / count) < 0.006) return;
     const blob = encodeWav(chunks, context.sampleRate);
     if (blob.size >= 2_048) sendClip(blob, "audio/wav");
   }, [sendClip]);
