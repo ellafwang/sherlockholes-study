@@ -10,6 +10,16 @@ export type Summary = Tables<"summaries">;
 export type LearnTopic = Tables<"learn_topics">;
 export type LearnMessage = Tables<"learn_messages">;
 
+export type FeedbackSummaryItem = {
+  id: string;
+  session_id: string;
+  narrative: string | null;
+  covered: unknown;
+  gaps: unknown;
+  created_at: string;
+  sessions: { id: string; title: string } | null;
+};
+
 function unwrap<T>(result: { data: T; error: unknown }): T {
   const error = result.error as { message?: string } | null;
   if (error) throw new Error(error.message ?? "The case files are unreachable.");
@@ -160,6 +170,14 @@ export const getSummary = async (sessionId: string) =>
       .limit(1)
       .maybeSingle(),
   );
+
+export const listFeedbackSummaries = async (): Promise<FeedbackSummaryItem[]> =>
+  unwrap(
+    await supabase
+      .from("summaries")
+      .select("id, session_id, narrative, covered, gaps, created_at, sessions(id, title)")
+      .order("created_at", { ascending: false }),
+  ) ?? [];
 
 export const saveSummary = async (row: {
   session_id: string;
