@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -26,7 +26,22 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createSession, deleteSession, getNotebook, listSessions, type Session } from "@/lib/db";
+import {
+  createSession,
+  deleteSession,
+  getNotebook,
+  listSessions,
+  updateSession,
+  type Session,
+} from "@/lib/db";
+import { MathTextarea } from "@/components/MathTextarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/notebook/$notebookId")({
   head: () => ({
@@ -82,6 +97,36 @@ function NotebookPage() {
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
+  const [editing, setEditing] = useState<Session | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editMinutes, setEditMinutes] = useState("5");
+  const [editStage, setEditStage] = useState("material");
+  const [editNotes, setEditNotes] = useState("");
+
+  const openEditor = (session: Session) => {
+    setEditing(session);
+    setEditTitle(session.title);
+    setEditMinutes(String(Math.max(1, Math.round(session.blurt_limit_seconds / 60))));
+    setEditStage(session.stage);
+    setEditNotes(session.notes_text ?? "");
+  };
+
+  const save = useMutation({
+    mutationFn: () =>
+      updateSession(editing!.id, {
+        title: editTitle.trim(),
+        stage: editStage,
+        notes_text: editNotes.trim() || null,
+        blurt_limit_seconds: Math.max(60, Math.round(Number(editMinutes) || 5) * 60),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions", notebookId] });
+      if (editing) queryClient.invalidateQueries({ queryKey: ["session", editing.id] });
+      setEditing(null);
+      toast.success("Session updated");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const create = useMutation({
     mutationFn: () => createSession(notebookId, title.trim()),
@@ -154,7 +199,7 @@ function NotebookPage() {
                 to="/session/$sessionId"
                 params={{ sessionId: session.id }}
                 search={{ view: undefined }}
-                className="flex items-center justify-between gap-4 p-5 pr-14"
+                className="flex items-center justify-between gap-4 p-5 pr-24"
               >
                 <div>
                   <h3 className="text-xl font-semibold leading-tight">{session.title}</h3>
@@ -168,15 +213,26 @@ function NotebookPage() {
                 </div>
                 <span className="label-caps text-brass">Open →</span>
               </Link>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Delete ${session.title}`}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-                onClick={() => setPendingDelete(session)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="absolute right-3 top-1/2 flex -translate-y-1/2 gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Edit ${session.title}`}
+                  className="text-muted-foreground"
+                  onClick={() => openEditor(session)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete ${session.title}`}
+                  className="text-muted-foreground"
+                  onClick={() => setPendingDelete(session)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -207,6 +263,69 @@ function NotebookPage() {
             </Button>
             <Button disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>
               {create.isPending ? "Starting…" : "Start session"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit session</DialogTitle>
+            <DialogDescription>Change the name, speaking time, stage or notes.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-session-title">Session name</Label>
+              <Input
+                id="edit-session-title"
+                autoFocus
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-session-minutes">Speaking time (minutes)</Label>
+              <Input
+                id="edit-session-minutes"
+                type="number"
+                min={1}
+                max={60}
+                value={editMinutes}
+                onChange={(event) => setEditMinutes(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-session-stage">Where the session is up to</Label>
+              <Select value={editStage} onValueChange={setEditStage}>
+                <SelectTrigger id="edit-session-stage">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STAGE_LABEL).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes Sherlock studies</Label>
+              <MathTextarea
+                value={editNotes}
+                onValueChange={setEditNotes}
+                placeholder="Paste or edit the notes for this session…"
+                className="min-h-32"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button disabled={!editTitle.trim() || save.isPending} onClick={() => save.mutate()}>
+              {save.isPending ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
