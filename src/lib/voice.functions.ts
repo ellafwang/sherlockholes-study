@@ -3,6 +3,54 @@ import { z } from "zod";
 
 const speakSchema = z.object({ text: z.string().min(1).max(4000) });
 
+const listenSchema = z.object({
+  audio: z.string().min(16),
+  mimeType: z.string().min(3).max(80).default("audio/webm"),
+});
+
+export type ListenResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "not_connected" | "failed"; message: string };
+
+/** Transcribes a short clip of the student's voice with ElevenLabs Scribe. */
+export const transcribeSpeech = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => listenSchema.parse(input))
+  .handler(async ({ data }): Promise<ListenResult> => {
+    const apiKey = process.env["ELEVENLABS_API_KEY"];
+    if (!apiKey) {
+      return {
+        ok: false,
+        reason: "not_connected",
+        message: "Transcription isn't connected yet — type your explanation instead.",
+      };
+    }
+
+    const bytes = Buffer.from(data.audio, "base64");
+    const form = new FormData();
+    form.append("file", new Blob([bytes], { type: data.mimeType }), "blurt.webm");
+    form.append("model_id", "scribe_v2");
+    form.append("language_code", "eng");
+
+    const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: { "xi-api-key": apiKey },
+      body: form,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.error(`ElevenLabs STT error [${response.status}]: ${detail}`);
+      return {
+        ok: false,
+        reason: "failed",
+        message: "That clip didn't come through. Keep talking, or type instead.",
+      };
+    }
+
+    const body = (await response.json()) as { text?: string };
+    return { ok: true, text: (body.text ?? "").trim() };
+  });
+
 // George — a measured, British-sounding narrator voice for Sherlock.
 const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
 
