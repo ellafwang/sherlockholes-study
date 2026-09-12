@@ -235,6 +235,8 @@ const learnSchema = z.object({
   sessionTitle: z.string(),
   notes: z.string(),
   focus: z.array(z.string()),
+  keyConcepts: z.array(z.string()).default([]),
+  report: z.string().default(""),
   history: z.array(z.object({ role: z.string(), content: z.string() })),
   message: z.string(),
 });
@@ -245,11 +247,17 @@ export const learnReply = createServerFn({ method: "POST" })
     const { generateProse } = await import("./ai.server");
     const reply = await generateProse({
       instructions: `You are Sherlock Holes in teaching mode: a warm, exacting tutor for the topic "${data.sessionTitle}".
-Explain clearly and concretely, in short paragraphs, building from the student's own notes wherever possible.
+Teach only from the student's own notes, their key concepts and the session feedback report given below — never invent material they never studied.
+Take one concept at a time: define it in plain words, then explain how it works, then give one concrete example, then name the special case that trips people up.
+Where the feedback report says they missed or misunderstood something, say gently what they got wrong before teaching the correct version.
+Explain in short spoken paragraphs. Never use markdown symbols, headings, asterisks or bullet characters — this text is read aloud.
 Every reply ends with one practice question that checks the thing you just explained.
-Never use markdown symbols, headings, asterisks or bullet characters — this text is read aloud.
-Keep replies under 150 words.`,
+Keep replies under 180 words.`,
       input: `The student's notes:\n${data.notes || "(none)"}
+
+Key concepts of this session:\n${data.keyConcepts.join("\n") || "(none listed)"}
+
+Feedback report from their teaching attempt:\n${data.report || "(no report yet)"}
 
 Concepts they still need to close:\n${data.focus.join("\n") || "(none flagged)"}
 

@@ -500,16 +500,70 @@ function SessionPage() {
     }
   };
 
+  /* the lesson plan: gaps and open questions from the report first, then the
+     session's own key concepts so there is always something to be taught */
+  const learnPlan = useMemo(() => {
+    const seen = new Set<string>();
+    const plan: string[] = [];
+    const push = (value?: string | null) => {
+      const topic = (value ?? "").trim();
+      if (!topic) return;
+      const key = topic.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      plan.push(topic);
+    };
+    (learnTopics.data ?? []).forEach((row) => push(row.topic));
+    (summary.data?.gaps as string[] | undefined)?.forEach(push);
+    concepts.forEach(push);
+    return plan;
+  }, [learnTopics.data, summary.data, concepts]);
+
+  const taughtTopics = useMemo(() => {
+    const said = (learnMessages.data ?? []).map((row) => row.content.toLowerCase()).join(" ");
+    return learnPlan.filter((topic) => said.includes(topic.toLowerCase()));
+  }, [learnMessages.data, learnPlan]);
+
+  const nextLearnTopic = useMemo(() => {
+    const done = new Set(taughtTopics.map((topic) => topic.toLowerCase()));
+    return learnPlan.find((topic) => !done.has(topic.toLowerCase())) ?? null;
+  }, [learnPlan, taughtTopics]);
+
+  const reportContext = useMemo(() => {
+    const row = summary.data;
+    if (!row) return "";
+    const list = (label: string, values: unknown) =>
+      Array.isArray(values) && values.length > 0 ? `${label}: ${(values as string[]).join("; ")}` : "";
+    return [
+      row.narrative ? `Summary: ${row.narrative}` : "",
+      list("Concepts they covered well", row.covered),
+      list("Questions they answered correctly", row.answered_well),
+      list("Questions still open", row.open_questions),
+      list("Missed or misunderstood", row.gaps),
+      `They spoke for ${row.speaking_seconds} seconds and gave ${row.example_count} examples.`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, [summary.data]);
+
   const openLearn = async () => {
     setPanel("learn");
     if (stage !== "learn") {
       await updateSession(sessionId, { stage: "learn" });
       queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
     }
-    if ((learnMessages.data ?? []).length === 0) {
-      void sendLearn("Start with the first thing I missed, and keep it short.");
+    if ((learnMessages.data ?? []).length === 0 && !learnBusy) {
+      const first = learnPlan[0];
+      void sendLearn(
+        first
+          ? `Teach me “${first}” from my notes — start with what I got wrong about it, then explain it properly.`
+          : "Walk me through my notes concept by concept, starting with the first one.",
+      );
     }
   };
+
+  const teachTopic = (topic: string) =>
+    sendLearn(`Teach me “${topic}” using my notes and the feedback report.`);
 
   const sendLearn = async (message: string) => {
     if (!session.data) return;
@@ -522,7 +576,9 @@ function SessionPage() {
         data: {
           sessionTitle: session.data.title,
           notes,
-          focus: (learnTopics.data ?? []).map((topic) => topic.topic),
+          focus: learnPlan,
+          keyConcepts: concepts,
+          report: reportContext,
           history,
           message,
         },
@@ -799,10 +855,13 @@ function SessionPage() {
                 role: row.role,
                 content: row.content,
               }))}
-              focus={(learnTopics.data ?? []).map((topic) => topic.topic)}
+              focus={learnPlan}
+              covered={taughtTopics}
+              nextTopic={nextLearnTopic}
               busy={learnBusy}
               voiceNotice={voiceNotice}
               onSend={sendLearn}
+              onTeachTopic={teachTopic}
               onReplay={playAudio}
               onBack={() => setPanel("feedback")}
             />
