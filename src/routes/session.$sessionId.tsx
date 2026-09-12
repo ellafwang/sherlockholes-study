@@ -116,6 +116,7 @@ function SessionPage() {
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
+  const [retake, setRetake] = useState(false);
   const lastGradeAt = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
@@ -126,6 +127,9 @@ function SessionPage() {
   const concepts = useMemo(() => (session.data ? keyConceptsOf(session.data) : []), [session.data]);
   const notes = session.data?.notes_text ?? "";
   const remaining = Math.max(0, limit - elapsed);
+  // A session is complete once its feedback summary exists; the mic stays
+  // locked unless the user deliberately starts a fresh attempt (teachAgain).
+  const speakingLocked = Boolean(summary.data) && !retake;
 
   useEffect(() => {
     if (search.view === "feedback") setPanel("feedback");
@@ -341,6 +345,10 @@ function SessionPage() {
   };
 
   const resumeTeaching = () => {
+    if (speakingLocked) {
+      toast.info("Feedback for this session is complete — the mic is closed.");
+      return;
+    }
     setRunning(true);
     if (speech.supported) speech.start();
   };
@@ -353,6 +361,10 @@ function SessionPage() {
     if (speech.listening) {
       await speech.stop();
       if (stage === "teach" && panel === "none") await flushRemaining();
+      return;
+    }
+    if (speakingLocked) {
+      toast.info("Feedback for this session is complete — the mic is closed.");
       return;
     }
     speech.start();
@@ -765,6 +777,7 @@ function SessionPage() {
     speech.reset();
     setVerdict("neutral");
     setReaction(null);
+    setRetake(true);
     setRunning(true);
     if (speech.supported) speech.start();
   };
@@ -912,12 +925,14 @@ function SessionPage() {
             <RecorderOrb
               listening={speech.listening}
               speaking={speech.speaking}
-              disabled={!speech.supported}
+              disabled={!speech.supported || speakingLocked}
               onToggle={toggleRecorder}
               levels={speech.levels}
               wordCount={spokenWords}
               label={
-                !speech.supported
+                speakingLocked
+                  ? "Case closed"
+                  : !speech.supported
                   ? "Mic unavailable"
                   : grading
                     ? "Sherlock is following"
@@ -959,7 +974,7 @@ function SessionPage() {
             </div>
           )}
 
-          {stage === "teach" && panel === "none" && (
+          {stage === "teach" && panel === "none" && !speakingLocked && (
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {running ? (
                 <Button variant="secondary" onClick={pauseTeaching}>
@@ -987,7 +1002,14 @@ function SessionPage() {
             </p>
           )}
 
-          {panel === "none" && speech.supported && (
+          {speakingLocked && panel === "none" && (
+            <p className="mt-4 max-w-md text-center text-sm text-muted-foreground">
+              This session's feedback is complete — the case is closed. Review the report on
+              the right, or start a new session from the notebook to keep practicing.
+            </p>
+          )}
+
+          {panel === "none" && speech.supported && !speakingLocked && (
             <button
               type="button"
               onClick={() => setShowTyping((value) => !value)}
@@ -997,7 +1019,7 @@ function SessionPage() {
             </button>
           )}
 
-          {(!speech.supported || showTyping) && panel === "none" && (
+          {(!speech.supported || showTyping) && panel === "none" && !speakingLocked && (
             <div className="mt-5 w-full max-w-xl">
               <p className="text-sm text-muted-foreground">
                 Type what you'd say instead — Sherlock reacts the
