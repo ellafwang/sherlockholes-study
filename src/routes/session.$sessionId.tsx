@@ -805,8 +805,20 @@ function SessionPage() {
   useEffect(() => {
     if (panel !== "qa" || !activeQuestion) return;
     speakOnce(`q:${activeQuestion.questionId ?? activeQuestion.question}`, activeQuestion.question);
+    /* warm the voice for whatever is coming next so it starts instantly when
+       it pops up instead of lagging behind the box */
+    (followUp ? pendingQuestions : pendingQuestions.slice(1)).slice(0, 2).forEach((question) =>
+      prefetchAudio(question.question),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, activeQuestion?.question, activeQuestion?.questionId]);
+
+  /* the moment questions exist (seeded during teaching), warm the first one so
+     opening Q&A doesn't wait on voice generation */
+  useEffect(() => {
+    pendingQuestions.slice(0, 1).forEach((question) => prefetchAudio(question.question));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestions[0]?.id]);
 
   /* the feedback summary is read aloud the moment the feedback tab opens, and
      re-read on each fresh visit to it */
