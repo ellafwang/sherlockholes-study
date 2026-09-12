@@ -14,7 +14,7 @@ import { MaterialStage } from "@/components/session/MaterialStage";
 import { QaPanel, verdictOf } from "@/components/session/QaPanel";
 import { RecorderOrb } from "@/components/session/RecorderOrb";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MathTextarea } from "@/components/MathTextarea";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import {
   addLearnMessage,
@@ -1083,11 +1083,12 @@ function SessionPage() {
                 Type what you'd say instead — Sherlock reacts the
                 same way.
               </p>
-              <Textarea
+              <MathTextarea
                 value={typedBlurt}
-                onChange={(event) => setTypedBlurt(event.target.value)}
+                onValueChange={setTypedBlurt}
                 placeholder="Explain it here…"
                 className="mt-2 min-h-24"
+                wrapperClassName="mt-2"
               />
               <Button
                 className="mt-2"
