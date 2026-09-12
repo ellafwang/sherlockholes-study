@@ -34,9 +34,9 @@ export const seedQuestions = createServerFn({ method: "POST" })
     const result = await generateJson<{ questions: { question: string; concept: string }[] }>({
       instructions: `${PERSONA}
 You have just been handed the student's material for the topic "${data.sessionTitle}".
-Write 5 to 7 questions a confused student would need answered to truly understand this material.
+Write 5 to 7 questions a well-prepared undergraduate classmate would ask to test whether the student really understands the material.
 Every question MUST be answerable from the material below — never ask about anything it does not mention.
-Cover definitions, conditions, edge cases and "why" questions found in the material. One sentence each.`,
+Focus on mechanisms, edge cases, connections between ideas, when a rule breaks, and "why" questions. Do not ask for basic definitions. One sentence each.`,
       input: `Notes:\n${data.notes || "(none given)"}\n\nKey concepts the student intends to cover:\n${
         data.concepts.join("\n") || "(none listed)"
       }`,
