@@ -175,12 +175,12 @@ function Dashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="notebook-title">Name</Label>
+              <Label htmlFor="notebook-title">Subject</Label>
               <Input
                 id="notebook-title"
                 value={title}
                 autoFocus
-                placeholder="Organic Chemistry I"
+                placeholder="Sherlock Holmes"
                 onChange={(event) => setTitle(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && title.trim()) create.mutate();
@@ -188,7 +188,7 @@ function Dashboard() {
               />
             </div>
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Case-file color</legend>
+              <legend className="text-sm font-medium">Notebook color</legend>
               <div className="flex flex-wrap gap-3">
                 {NOTEBOOK_COLORS.map((option) => (
                   <Button
@@ -210,11 +210,11 @@ function Dashboard() {
               </div>
             </fieldset>
             <div className="space-y-2">
-              <Label htmlFor="notebook-subject">Subject (optional)</Label>
+              <Label htmlFor="notebook-subject">Brief Description (optional)</Label>
               <Input
                 id="notebook-subject"
                 value={subject}
-                placeholder="Chemistry"
+                placeholder="Sherlock Holme's Love Life"
                 onChange={(event) => setSubject(event.target.value)}
               />
             </div>
