@@ -37,14 +37,29 @@ export function MaterialStage({
     setDraft("");
   };
 
-  const readFile = async (file: File) => {
-    if (file.size > 400_000) {
-      toast.error("That file is a bit long — paste the section you want to teach instead.");
-      return;
+  const readFiles = async (files: File[]) => {
+    setReading(true);
+    try {
+      const results = await Promise.all(files.map((file) => readNotesFile(file)));
+      const added: string[] = [];
+      let blob = "";
+      for (const result of results) {
+        if ("error" in result) {
+          toast.error(`${result.name}: ${result.error}`);
+          continue;
+        }
+        added.push(result.name);
+        blob += `${blob ? "\n\n" : ""}--- ${result.name} ---\n${result.text}`;
+      }
+      if (!blob) return;
+      setNotes((current) => (current ? `${current}\n\n${blob}` : blob));
+      setSources((current) => [...current, ...added]);
+      toast.success(
+        added.length === 1 ? `Added notes from ${added[0]}` : `Added notes from ${added.length} files`,
+      );
+    } finally {
+      setReading(false);
     }
-    const text = await file.text();
-    setNotes((current) => (current ? `${current}\n\n${text}` : text));
-    toast.success(`Added notes from ${file.name}`);
   };
 
   const ready = notes.trim().length > 20 || concepts.length > 0;
