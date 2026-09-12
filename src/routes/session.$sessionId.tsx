@@ -607,6 +607,9 @@ function SessionPage() {
         exampleCount,
         narrative: result.narrative,
       };
+      /* warm the voice for the report before the database writes finish, so
+         playback starts the moment the panel is ready */
+      prefetchAudio(reportSpeechText(freshReport));
       feedbackSpokenRef.current = true;
       stopAudio();
       queueAudio(reportSpeechText(freshReport));
