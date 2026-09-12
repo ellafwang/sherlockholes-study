@@ -134,7 +134,10 @@ const answerSchema = z.object({
   question: z.string(),
   answer: z.string(),
   followUpDepth: z.number(),
+  /** What the student actually said while teaching, so grading is grounded in it. */
+  transcript: z.string().optional().default(""),
 });
+
 
 export type AnswerGrade = {
   verdict: Verdict;
