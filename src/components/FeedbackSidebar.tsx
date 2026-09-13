@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { FileSearch, Home } from "lucide-react";
+import { FileSearch, Home, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { TreasureChestIcon } from "@/components/MysteryIcons";
+import { Input } from "@/components/ui/input";
 import {
   Sidebar,
   SidebarContent,
