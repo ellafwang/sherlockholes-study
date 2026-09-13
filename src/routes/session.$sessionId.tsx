@@ -594,24 +594,11 @@ function SessionPage() {
         narrative: result.narrative,
       });
 
-      // Start speaking the instant the report is saved so the student hears
-      // the summary as the feedback panel renders.
-      const freshReport: Report = {
-        covered: result.covered,
-        answeredWell: result.answeredWell,
-        gaps: result.gaps,
-        openQuestions: stillOpen,
-        subtopicTime,
-        speakingSeconds,
-        exampleCount,
-        narrative: result.narrative,
-      };
-      /* warm the voice for the report before the database writes finish, so
-         playback starts the moment the panel is ready */
-      prefetchAudio(reportSpeechText(freshReport));
-      feedbackSpokenRef.current = true;
-      stopAudio();
-      queueAudio(reportSpeechText(freshReport));
+      // The narration is fired by the feedback panel effect below, so the
+      // voice starts exactly when the report text appears — not before it.
+      feedbackSpokenRef.current = false;
+
+
 
       const existing = new Set(
         ((await listLearnTopics(sessionId)) ?? []).map((topic) =>
