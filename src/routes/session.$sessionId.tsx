@@ -757,6 +757,19 @@ function SessionPage() {
 
   useEffect(() => stopAudio, []);
 
+  /* leaving the session by any browser route — tab close, reload, history
+     back/forward — cuts the voice even when the unmount cleanup runs late */
+  useEffect(() => {
+    const silence = () => stopAudio();
+    window.addEventListener("pagehide", silence);
+    window.addEventListener("beforeunload", silence);
+    return () => {
+      window.removeEventListener("pagehide", silence);
+      window.removeEventListener("beforeunload", silence);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const speakOnce = (key: string, text: string) => {
     if (!text.trim()) return;
     if (spokenOnceRef.current.has(key)) return;
