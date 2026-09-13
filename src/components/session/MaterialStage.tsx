@@ -74,7 +74,7 @@ export function MaterialStage({
             ref={fileInput}
             type="file"
             multiple
-            accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.rtf,.png,.jpg,.jpeg,.webp,.gif,application/pdf,text/plain,image/*"
+            accept="*/*"
             className="hidden"
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
@@ -92,7 +92,8 @@ export function MaterialStage({
               {reading ? "Reading your files…" : "Upload files"}
             </Button>
             <span className="text-sm text-muted-foreground">
-              PDF, Word, PowerPoint, photos or screenshots, text, markdown or CSV — several at once.
+              Any notes you have — photos of handwriting, scans, PDFs, Word, PowerPoint, text —
+              several at once. Handwriting is scanned into text for you.
             </span>
           </div>
           {sources.length > 0 && (
