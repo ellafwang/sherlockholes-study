@@ -648,9 +648,13 @@
   }
 }
 
-@media (max-width: 1250px) {
+@media (max-width: 1500px) {
   .pitch-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .pitch-stage {
+    order: -1;
   }
 
   .pitch-thumbnails {
