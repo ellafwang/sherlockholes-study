@@ -49,7 +49,7 @@ function PitchPage() {
   const goTo = (nextIndex: number) => {
     const safe = Math.min(pitchSlides.length - 1, Math.max(0, nextIndex));
     void navigate({
-      search: (previous) => ({ ...previous, slide: safe + 1, print: undefined }),
+      search: { slide: safe + 1, print: false },
       replace: true,
     });
   };
@@ -104,7 +104,7 @@ function PitchPage() {
           <Button variant="secondary" onClick={() => void stageRef.current?.requestFullscreen()}>
             <Maximize2 /> Present
           </Button>
-          <Button variant="secondary" onClick={() => void navigate({ search: { print: true } })}>
+          <Button variant="secondary" onClick={() => void navigate({ search: { slide: undefined, print: true } })}>
             <Printer /> Print
           </Button>
         </div>
