@@ -40,6 +40,7 @@ import {
 } from "@/lib/db";
 import { buildReport, gradeAnswer, gradeBlurt, learnReply, seedQuestions } from "@/lib/sherlock.functions";
 import { latexToSpeech } from "@/lib/math-speech";
+import { getSherlockAudioContext, supportsStreamingSpeech, unlockSherlockVoice } from "@/lib/sherlock-voice";
 import { speakAsSherlock } from "@/lib/voice.functions";
 import { cn } from "@/lib/utils";
 
@@ -149,6 +150,7 @@ function SessionPage() {
   const audioUrlRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const pendingPlayRef = useRef<(() => Promise<void>) | null>(null);
 
   const stage = session.data?.stage ?? "material";
@@ -550,6 +552,9 @@ function SessionPage() {
     setPanel("feedback");
     await speech.stop();
     setRunning(false);
+    // Fill the report-generation gap with immediate speech; the finished report
+    // replaces this line as soon as it appears.
+    if (!report) void playAudio("Let me look over my notes.");
     if (!session.data) return;
     if (stage !== "feedback" && stage !== "learn") {
       await updateSession(sessionId, { stage: "feedback" });
@@ -641,6 +646,8 @@ function SessionPage() {
   const stopPlayback = () => {
     speechTokenRef.current += 1;
     pendingPlayRef.current = null;
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
     const source = audioSourceRef.current;
     if (source) {
       source.onended = null;
@@ -700,23 +707,14 @@ function SessionPage() {
   };
 
   const getAudioContext = () => {
-    if (audioContextRef.current) return audioContextRef.current;
-    if (typeof window === "undefined") return null;
-    const AudioContextConstructor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) return null;
-    const context = new AudioContextConstructor();
+    const context = getSherlockAudioContext();
     audioContextRef.current = context;
     return context;
   };
 
   /* Called directly from Q&A and feedback clicks. Resuming while the click is
      still active lets the generated audio play later without autoplay blocking. */
-  const unlockVoice = () => {
-    const context = getAudioContext();
-    if (context?.state === "suspended") void context.resume().catch(() => undefined);
-  };
+  const unlockVoice = unlockSherlockVoice;
 
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
@@ -1036,8 +1034,13 @@ function SessionPage() {
   useEffect(
     () => () => {
       audioRef.current?.pause();
-      audioSourceRef.current?.stop();
-      void audioContextRef.current?.close();
+      try {
+        audioSourceRef.current?.stop();
+      } catch {
+        // Already-ended sources cannot be stopped twice.
+      }
+      // Keep the shared audio context alive across in-app navigation; a sidebar
+      // click may have unlocked it for the next feedback report.
     },
     [],
   );
