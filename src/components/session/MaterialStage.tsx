@@ -1,4 +1,4 @@
-import { FileText, Upload } from "lucide-react";
+import { FileText, Loader2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
