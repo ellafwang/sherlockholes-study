@@ -142,7 +142,6 @@ function SessionPage() {
   const [learnBusy, setLearnBusy] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
-  const [spokenLine, setSpokenLine] = useState<string | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [retake, setRetake] = useState(false);
   const lastGradeAt = useRef(0);
@@ -646,7 +645,6 @@ function SessionPage() {
     }
     setSpeaking(false);
     setVoiceLoading(false);
-    setSpokenLine(null);
   };
 
   /* full stop: current line and everything queued after it */
@@ -719,7 +717,6 @@ function SessionPage() {
       await new Promise<void>((resolve) => {
         const finish = () => {
           setSpeaking(false);
-          setSpokenLine(null);
           resolve();
         };
         audio.onended = finish;
@@ -731,7 +728,6 @@ function SessionPage() {
             return;
           }
           setSpeaking(true);
-          setSpokenLine(text);
           await audio.play();
           setVoiceNotice(null);
         };
@@ -1330,7 +1326,6 @@ function SessionPage() {
             <FeedbackPanel
               report={report}
               loading={reportBusy}
-              speakingLine={spokenLine}
               onBack={() => {
                 stopAudio();
                 setPanel("none");

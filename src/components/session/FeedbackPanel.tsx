@@ -46,14 +46,12 @@ function List({ title, items, empty }: { title: string; items: string[]; empty: 
 export function FeedbackPanel({
   report,
   loading,
-  speakingLine,
   onBack,
   onLearn,
   onNewTeach,
 }: {
   report: Report | null;
   loading: boolean;
-  speakingLine?: string | null;
   onBack: () => void;
   onLearn: () => void;
   onNewTeach: () => void;
@@ -71,13 +69,7 @@ export function FeedbackPanel({
       </div>
 
       {loading || !report ? (
-        speakingLine ? (
-          <p className="mt-8 text-lg italic leading-snug text-muted-foreground" aria-live="polite">
-            <MathText>{speakingLine}</MathText>
-          </p>
-        ) : (
-          <p className="mt-8 text-muted-foreground">Sherlock is gathering his thoughts…</p>
-        )
+        <p className="mt-8 text-muted-foreground">Sherlock is writing up his case notes…</p>
       ) : (
         <div className="mt-4 grid flex-1 gap-5 overflow-y-auto sm:grid-cols-[1fr_auto]">
           <div className="space-y-5 pr-1">
