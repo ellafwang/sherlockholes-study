@@ -10,10 +10,18 @@ function extensionOf(name: string) {
   return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-async function readPdf(file: File): Promise<string> {
+async function loadPdfjs() {
   const pdfjs = await import("pdfjs-dist");
   const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  return pdfjs;
+}
+
+/** Max pages we photograph and hand to the scanner, to keep uploads quick. */
+const MAX_SCAN_PAGES = 20;
+
+async function readPdf(file: File): Promise<string> {
+  const pdfjs = await loadPdfjs();
 
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
@@ -29,6 +37,32 @@ async function readPdf(file: File): Promise<string> {
   }
   return pages.join("\n\n");
 }
+
+/** Turns each page of a PDF into a picture so handwriting can be read. */
+async function scanPdf(file: File): Promise<string> {
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({ data }).promise;
+  const count = Math.min(pdf.numPages, MAX_SCAN_PAGES);
+  const parts: string[] = [];
+
+  for (let index = 1; index <= count; index += 1) {
+    const page = await pdf.getPage(index);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d");
+    if (!context) continue;
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const text = await scanPicture(dataUrl);
+    if (text) parts.push(count > 1 ? `Page ${index}\n${text}` : text);
+  }
+
+  return parts.join("\n\n").trim();
+}
+
 
 async function readDocx(file: File): Promise<string> {
   const mammoth = (await import("mammoth/mammoth.browser.js")) as {
