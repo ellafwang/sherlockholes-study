@@ -152,6 +152,7 @@ function SessionPage() {
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const pendingPlayRef = useRef<(() => Promise<void>) | null>(null);
+  const notesSaveTimer = useRef<number | null>(null);
 
   const stage = session.data?.stage ?? "material";
   const limit = session.data?.blurt_limit_seconds ?? 180;
