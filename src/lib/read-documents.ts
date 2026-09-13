@@ -154,14 +154,15 @@ export async function readNotesFile(file: File): Promise<ReadResult> {
 
     if (ext === "pdf" || file.type === "application/pdf") {
       const text = await readPdf(file);
-      if (!text) {
-        return {
-          name: file.name,
-          error: "that PDF has no readable text (it may be a scan) — paste the section instead",
-        };
+      if (text) return { name: file.name, text };
+      // No selectable text: it's a scan or handwritten pages, so read the pictures.
+      const scanned = await scanPdf(file);
+      if (!scanned) {
+        return { name: file.name, error: "no readable writing was found in that file" };
       }
-      return { name: file.name, text };
+      return { name: file.name, text: scanned };
     }
+
 
     if (ext === "docx") {
       const text = await readDocx(file);
