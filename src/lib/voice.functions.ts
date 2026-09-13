@@ -190,7 +190,7 @@ export const speakAsSherlock = createServerFn({ method: "POST" })
         headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
           text: data.text,
-          model_id: "eleven_multilingual_v2",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: {
             stability: 0.55,
             similarity_boost: 0.75,

@@ -16,6 +16,8 @@
 - Sherlock voice uses the selected ElevenLabs voice ID
 - Case-file notebook artwork with a persistent notebook color picker
 - Q&A questions and feedback summaries narrated aloud, with Sherlock returning to neutral for feedback
+- Streaming voice starts feedback narration immediately; `/api/tts` verified with live audio
+- Six-slide pitch deck with cited evidence, engaging visuals, live-demo flow, speaker script, fullscreen, and print mode
 
 ## Open
 - Accounts / per-user data (intentionally deferred: no login for now)

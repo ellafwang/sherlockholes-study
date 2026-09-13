@@ -40,6 +40,7 @@ import {
 } from "@/lib/db";
 import { buildReport, gradeAnswer, gradeBlurt, learnReply, seedQuestions } from "@/lib/sherlock.functions";
 import { latexToSpeech } from "@/lib/math-speech";
+import { getSherlockAudioContext, supportsStreamingSpeech, unlockSherlockVoice } from "@/lib/sherlock-voice";
 import { speakAsSherlock } from "@/lib/voice.functions";
 import { cn } from "@/lib/utils";
 
@@ -149,6 +150,7 @@ function SessionPage() {
   const audioUrlRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const pendingPlayRef = useRef<(() => Promise<void>) | null>(null);
 
   const stage = session.data?.stage ?? "material";
@@ -550,6 +552,9 @@ function SessionPage() {
     setPanel("feedback");
     await speech.stop();
     setRunning(false);
+    // Fill the report-generation gap with immediate speech; the finished report
+    // replaces this line as soon as it appears.
+    if (!report) void playAudio("Let me look over my notes.");
     if (!session.data) return;
     if (stage !== "feedback" && stage !== "learn") {
       await updateSession(sessionId, { stage: "feedback" });
@@ -641,6 +646,8 @@ function SessionPage() {
   const stopPlayback = () => {
     speechTokenRef.current += 1;
     pendingPlayRef.current = null;
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
     const source = audioSourceRef.current;
     if (source) {
       source.onended = null;
@@ -700,22 +707,143 @@ function SessionPage() {
   };
 
   const getAudioContext = () => {
-    if (audioContextRef.current) return audioContextRef.current;
-    if (typeof window === "undefined") return null;
-    const AudioContextConstructor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) return null;
-    const context = new AudioContextConstructor();
+    const context = getSherlockAudioContext();
     audioContextRef.current = context;
     return context;
   };
 
   /* Called directly from Q&A and feedback clicks. Resuming while the click is
      still active lets the generated audio play later without autoplay blocking. */
-  const unlockVoice = () => {
-    const context = getAudioContext();
-    if (context?.state === "suspended") void context.resume().catch(() => undefined);
+  const unlockVoice = unlockSherlockVoice;
+
+  /**
+   * Progressive playback: the first MP3 chunk starts while ElevenLabs is still
+   * generating the rest. Returns false when the token was cancelled.
+   */
+  const playStreamingAudio = async (spoken: string, token: number) => {
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    const response = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: spoken }),
+      signal: controller.signal,
+    });
+    if (token !== speechTokenRef.current) return false;
+    if (!response.ok || !response.body) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(detail || `Streaming voice failed with ${response.status}`);
+    }
+
+    const mediaSource = new MediaSource();
+    const url = URL.createObjectURL(mediaSource);
+    audioUrlRef.current = url;
+    const audio = audioRef.current ?? new Audio();
+    audioRef.current = audio;
+    audio.src = url;
+    audio.preload = "auto";
+
+    await new Promise<void>((resolve, reject) => {
+      mediaSource.addEventListener("sourceopen", () => resolve(), { once: true });
+      mediaSource.addEventListener("sourceclose", () => reject(new Error("The voice stream closed.")), {
+        once: true,
+      });
+    });
+    if (token !== speechTokenRef.current) return false;
+
+    const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+    sourceBuffer.mode = "sequence";
+    const reader = response.body.getReader();
+    const chunks: ArrayBuffer[] = [];
+    let streamDone = false;
+    let playbackStarted = false;
+
+    let finishPlayback: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      finishPlayback = () => {
+        if (audioUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          audioUrlRef.current = null;
+        }
+        if (streamAbortRef.current === controller) streamAbortRef.current = null;
+        setSpeaking(false);
+        resolve();
+      };
+    });
+
+    const appendNext = () => {
+      if (token !== speechTokenRef.current) {
+        void reader.cancel().catch(() => undefined);
+        finishPlayback();
+        return;
+      }
+      if (sourceBuffer.updating) return;
+      const chunk = chunks.shift();
+      if (chunk) {
+        try {
+          sourceBuffer.appendBuffer(chunk);
+        } catch (error) {
+          console.error(error);
+          finishPlayback();
+        }
+        return;
+      }
+      if (streamDone && mediaSource.readyState === "open") mediaSource.endOfStream();
+    };
+
+    const startPlayback = async () => {
+      if (token !== speechTokenRef.current) {
+        finishPlayback();
+        return;
+      }
+      setSpeaking(true);
+      setVoiceLoading(false);
+      setVoiceNotice(null);
+      await audio.play();
+    };
+
+    sourceBuffer.addEventListener("updateend", () => {
+      if (!playbackStarted) {
+        playbackStarted = true;
+        void startPlayback().catch((error: Error) => {
+          if (error.name === "NotAllowedError") {
+            setSpeaking(false);
+            pendingPlayRef.current = startPlayback;
+            setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
+          } else {
+            console.error(error);
+            setSpeaking(false);
+            setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+          }
+        });
+      }
+      appendNext();
+    });
+
+    audio.onended = finishPlayback;
+    audio.onerror = () => {
+      setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+      finishPlayback();
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (token !== speechTokenRef.current) return false;
+        if (done) break;
+        if (value) {
+          chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer);
+          appendNext();
+        }
+      }
+      streamDone = true;
+      appendNext();
+      await finished;
+      return true;
+    } catch (error) {
+      if (token !== speechTokenRef.current || controller.signal.aborted) return false;
+      throw error;
+    }
   };
 
   const playAudio = async (text: string) => {
@@ -725,6 +853,16 @@ function SessionPage() {
     const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
+      if (supportsStreamingSpeech()) {
+        try {
+          const streamed = await playStreamingAudio(spoken, token);
+          if (!streamed || token !== speechTokenRef.current) return;
+          return;
+        } catch (error) {
+          if (token !== speechTokenRef.current) return;
+          console.error("Streaming voice failed; falling back to buffered playback.", error);
+        }
+      }
       const result = await requestAudio(spoken);
       if (token !== speechTokenRef.current) return;
       if (!result.ok) {
@@ -1036,8 +1174,13 @@ function SessionPage() {
   useEffect(
     () => () => {
       audioRef.current?.pause();
-      audioSourceRef.current?.stop();
-      void audioContextRef.current?.close();
+      try {
+        audioSourceRef.current?.stop();
+      } catch {
+        // Already-ended sources cannot be stopped twice.
+      }
+      // Keep the shared audio context alive across in-app navigation; a sidebar
+      // click may have unlocked it for the next feedback report.
     },
     [],
   );
