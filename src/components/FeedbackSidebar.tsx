@@ -18,6 +18,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { listFeedbackSummaries, stringsOf } from "@/lib/db";
+import { unlockSherlockVoice } from "@/lib/sherlock-voice";
 
 function takeaway(narrative: string | null, covered: unknown, gaps: unknown) {
   const clean = narrative?.trim();
@@ -117,7 +118,11 @@ export function FeedbackSidebar() {
                         to="/session/$sessionId"
                         params={{ sessionId: session.id }}
                         search={{ view: "feedback" }}
-                        onClick={closeMobile}
+                        onPointerDown={unlockSherlockVoice}
+                        onClick={() => {
+                          unlockSherlockVoice();
+                          closeMobile();
+                        }}
                       >
                         <TreasureChestIcon className="mt-0.5 size-4 shrink-0" />
                         <span className="min-w-0 whitespace-normal">
