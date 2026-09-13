@@ -186,8 +186,8 @@ function NotebookPage() {
             <p className="mt-1 text-muted-foreground">
               A session is one topic you explain out loud, start to finish.
             </p>
-            <Button className="mt-5" onClick={() => setCreating(true)}>
-              <Plus className="mr-1 h-4 w-4" /> New session
+            <Button size="lg" className="mt-5 h-auto gap-2 px-7 py-5 text-lg" onClick={() => setCreating(true)}>
+              <Plus className="h-5 w-5" /> New session
             </Button>
           </div>
         )}
