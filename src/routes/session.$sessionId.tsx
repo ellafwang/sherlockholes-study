@@ -594,24 +594,11 @@ function SessionPage() {
         narrative: result.narrative,
       });
 
-      // Start speaking the instant the report is saved so the student hears
-      // the summary as the feedback panel renders.
-      const freshReport: Report = {
-        covered: result.covered,
-        answeredWell: result.answeredWell,
-        gaps: result.gaps,
-        openQuestions: stillOpen,
-        subtopicTime,
-        speakingSeconds,
-        exampleCount,
-        narrative: result.narrative,
-      };
-      /* warm the voice for the report before the database writes finish, so
-         playback starts the moment the panel is ready */
-      prefetchAudio(reportSpeechText(freshReport));
-      feedbackSpokenRef.current = true;
-      stopAudio();
-      queueAudio(reportSpeechText(freshReport));
+      // The narration is fired by the feedback panel effect below, so the
+      // voice starts exactly when the report text appears — not before it.
+      feedbackSpokenRef.current = false;
+
+
 
       const existing = new Set(
         ((await listLearnTopics(sessionId)) ?? []).map((topic) =>
@@ -757,6 +744,19 @@ function SessionPage() {
   /* ---------- Sherlock speaks every question and the feedback report ---------- */
   const spokenOnceRef = useRef<Set<string>>(new Set());
   const feedbackSpokenRef = useRef(false);
+
+  /* switching panels (or leaving the session) silences Sherlock at once: the
+     current line is aborted mid-stream and anything queued behind it dropped */
+  const lastPanelRef = useRef(panel);
+  useEffect(() => {
+    if (lastPanelRef.current === panel) return;
+    lastPanelRef.current = panel;
+    stopAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel]);
+
+  useEffect(() => stopAudio, []);
+
   const speakOnce = (key: string, text: string) => {
     if (!text.trim()) return;
     if (spokenOnceRef.current.has(key)) return;
