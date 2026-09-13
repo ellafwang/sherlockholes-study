@@ -856,6 +856,10 @@ function SessionPage() {
     if (lastPanelRef.current === panel) return;
     lastPanelRef.current = panel;
     stopAudio();
+    if (panel === "feedback") {
+      setVerdict("neutral");
+      setReaction(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel]);
 
