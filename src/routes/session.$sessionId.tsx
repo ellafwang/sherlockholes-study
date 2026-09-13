@@ -147,6 +147,8 @@ function SessionPage() {
   const lastGradeAt = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const pendingPlayRef = useRef<(() => Promise<void>) | null>(null);
 
   const stage = session.data?.stage ?? "material";
@@ -419,6 +421,7 @@ function SessionPage() {
     : null);
 
   const openQa = async () => {
+    unlockVoice();
     setRunning(false);
     await speech.stop();
     if (stage === "teach") await flushRemaining();
@@ -434,6 +437,7 @@ function SessionPage() {
 
   const submitAnswer = async (answer: string) => {
     if (!activeQuestion || !session.data) return;
+    unlockVoice();
     setQaBusy(true);
     await speech.stop();
     try {
@@ -495,6 +499,7 @@ function SessionPage() {
 
   const skipQuestion = async () => {
     if (!activeQuestion) return;
+    unlockVoice();
     setFollowUp(null);
     setFollowUpDepth(0);
     setVerdict("yellow");
@@ -539,6 +544,9 @@ function SessionPage() {
   }, [summary.data]);
 
   const openFeedback = async () => {
+    unlockVoice();
+    setVerdict("neutral");
+    setReaction(null);
     setPanel("feedback");
     await speech.stop();
     setRunning(false);
@@ -633,6 +641,17 @@ function SessionPage() {
   const stopPlayback = () => {
     speechTokenRef.current += 1;
     pendingPlayRef.current = null;
+    const source = audioSourceRef.current;
+    if (source) {
+      source.onended = null;
+      try {
+        source.stop();
+      } catch {
+        // A source that already ended cannot be stopped twice.
+      }
+      source.disconnect();
+      audioSourceRef.current = null;
+    }
     const audio = audioRef.current;
     if (audio) {
       audio.onended = null;
@@ -680,6 +699,25 @@ function SessionPage() {
     void requestAudio(spoken).catch(() => undefined);
   };
 
+  const getAudioContext = () => {
+    if (audioContextRef.current) return audioContextRef.current;
+    if (typeof window === "undefined") return null;
+    const AudioContextConstructor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return null;
+    const context = new AudioContextConstructor();
+    audioContextRef.current = context;
+    return context;
+  };
+
+  /* Called directly from Q&A and feedback clicks. Resuming while the click is
+     still active lets the generated audio play later without autoplay blocking. */
+  const unlockVoice = () => {
+    const context = getAudioContext();
+    if (context?.state === "suspended") void context.resume().catch(() => undefined);
+  };
+
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
@@ -705,6 +743,32 @@ function SessionPage() {
       const binary = atob(result.audio);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const context = getAudioContext();
+      if (context) {
+        if (context.state === "suspended") await context.resume();
+        if (token !== speechTokenRef.current) return;
+        const encodedAudio = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(encodedAudio).set(bytes);
+        const decoded = await context.decodeAudioData(encodedAudio);
+        if (token !== speechTokenRef.current) return;
+        const source = context.createBufferSource();
+        source.buffer = decoded;
+        source.connect(context.destination);
+        audioSourceRef.current = source;
+        setSpeaking(true);
+        setVoiceNotice(null);
+        await new Promise<void>((resolve) => {
+          source.onended = () => {
+            if (audioSourceRef.current === source) audioSourceRef.current = null;
+            setSpeaking(false);
+            resolve();
+          };
+          source.start();
+        });
+        return;
+      }
+
       const url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
       audioUrlRef.current = url;
 
@@ -782,7 +846,7 @@ function SessionPage() {
   }, []);
 
   /* ---------- Sherlock speaks every question and the feedback report ---------- */
-  const spokenOnceRef = useRef<Set<string>>(new Set());
+  const lastQuestionSpeechRef = useRef<string | null>(null);
   const feedbackSpokenRef = useRef(false);
 
   /* switching panels (or leaving the session) silences Sherlock at once: the
@@ -792,6 +856,10 @@ function SessionPage() {
     if (lastPanelRef.current === panel) return;
     lastPanelRef.current = panel;
     stopAudio();
+    if (panel === "feedback") {
+      setVerdict("neutral");
+      setReaction(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel]);
 
@@ -810,17 +878,17 @@ function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const speakOnce = (key: string, text: string) => {
-    if (!text.trim()) return;
-    if (spokenOnceRef.current.has(key)) return;
-    spokenOnceRef.current.add(key);
-    void playAudio(text);
-  };
-
   /* any question that pops up — Q&A or a follow-up — is asked out loud in full */
   useEffect(() => {
-    if (panel !== "qa" || !activeQuestion) return;
-    speakOnce(`q:${activeQuestion.questionId ?? activeQuestion.question}`, activeQuestion.question);
+    if (panel !== "qa") {
+      lastQuestionSpeechRef.current = null;
+      return;
+    }
+    if (!activeQuestion) return;
+    const key = `q:${activeQuestion.questionId ?? activeQuestion.question}`;
+    if (lastQuestionSpeechRef.current === key) return;
+    lastQuestionSpeechRef.current = key;
+    void playAudio(activeQuestion.question);
     /* warm the voice for whatever is coming next so it starts instantly when
        it pops up instead of lagging behind the box */
     (followUp ? pendingQuestions : pendingQuestions.slice(1)).slice(0, 2).forEach((question) =>
@@ -965,7 +1033,14 @@ function SessionPage() {
     if (speech.supported) speech.start();
   };
 
-  useEffect(() => () => audioRef.current?.pause(), []);
+  useEffect(
+    () => () => {
+      audioRef.current?.pause();
+      audioSourceRef.current?.stop();
+      void audioContextRef.current?.close();
+    },
+    [],
+  );
 
   if (session.isPending) {
     return <p className="p-10 text-muted-foreground">Opening the case…</p>;
@@ -1108,6 +1183,25 @@ function SessionPage() {
             >
               “<MathText>{reaction}</MathText>”
             </p>
+          )}
+
+          {voiceNotice && panel !== "learn" && (
+            <div className="mt-3 flex max-w-md flex-col items-center gap-2 text-center">
+              <p role="status" className="text-sm text-verdict-red">{voiceNotice}</p>
+              {(panel === "qa" ? activeQuestion?.question : panel === "feedback" && report ? reportSpeechText(report) : null) && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    unlockVoice();
+                    const text = panel === "qa" ? activeQuestion?.question : report ? reportSpeechText(report) : "";
+                    if (text) void playAudio(text);
+                  }}
+                >
+                  Hear Sherlock
+                </Button>
+              )}
+            </div>
           )}
 
 
