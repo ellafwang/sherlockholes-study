@@ -719,6 +719,7 @@ function SessionPage() {
       await new Promise<void>((resolve) => {
         const finish = () => {
           setSpeaking(false);
+          setSpokenLine(null);
           resolve();
         };
         audio.onended = finish;
@@ -730,6 +731,7 @@ function SessionPage() {
             return;
           }
           setSpeaking(true);
+          setSpokenLine(text);
           await audio.play();
           setVoiceNotice(null);
         };
