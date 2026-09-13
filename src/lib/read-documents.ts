@@ -198,7 +198,7 @@ export async function readNotesFile(
       const text = await readPdf(file);
       if (text) return { name: file.name, text };
       // No selectable text: it's a scan or handwritten pages, so read the pictures.
-      const scanned = await scanPdf(file);
+      const scanned = await scanPdf(file, onProgress);
       if (!scanned) {
         return { name: file.name, error: "no readable writing was found in that file" };
       }
