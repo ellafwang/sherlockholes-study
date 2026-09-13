@@ -169,8 +169,8 @@ function NotebookPage() {
             )}
           </div>
         </div>
-        <Button size="lg" onClick={() => setCreating(true)}>
-          <Plus className="mr-1 h-4 w-4" /> New session
+        <Button size="lg" className="h-auto gap-2 px-7 py-5 text-lg" onClick={() => setCreating(true)}>
+          <Plus className="h-5 w-5" /> New session
         </Button>
       </header>
 
