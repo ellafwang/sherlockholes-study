@@ -934,7 +934,13 @@ function SessionPage() {
     return (
       <div className="p-10">
         <p className="text-lg">This session no longer exists.</p>
-        <Button className="mt-4" onClick={() => navigate({ to: "/" })}>
+        <Button
+          className="mt-4"
+          onClick={() => {
+            stopAudio();
+            navigate({ to: "/" });
+          }}
+        >
           Back to notebooks
         </Button>
       </div>
@@ -942,6 +948,7 @@ function SessionPage() {
   }
 
   const backToNotebook = () => {
+    stopAudio();
     const notebookId = session.data?.notebook_id;
     if (!notebookId) return;
     navigate({ to: "/notebook/$notebookId", params: { notebookId } });
