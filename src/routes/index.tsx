@@ -139,7 +139,7 @@ function Dashboard() {
             <Plus className="h-5 w-5" /> New notebook
           </Button>
           <Button variant="secondary" size="lg" className="gap-2" asChild>
-            <Link to="/pitch">
+            <Link to="/pitch" search={{ slide: 1, print: false }}>
               <Presentation className="h-5 w-5" /> Pitch deck
             </Link>
           </Button>
