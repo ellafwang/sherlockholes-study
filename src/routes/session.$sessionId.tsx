@@ -40,7 +40,7 @@ import {
 } from "@/lib/db";
 import { buildReport, gradeAnswer, gradeBlurt, learnReply, seedQuestions } from "@/lib/sherlock.functions";
 import { latexToSpeech } from "@/lib/math-speech";
-import { speakAsSherlock } from "@/lib/voice.functions";
+import { streamSpeech } from "@/lib/tts-stream";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/session/$sessionId")({
@@ -113,7 +113,6 @@ function SessionPage() {
   const seedQuestionsFn = useServerFn(seedQuestions);
   const buildReportFn = useServerFn(buildReport);
   const learnReplyFn = useServerFn(learnReply);
-  const speakFn = useServerFn(speakAsSherlock);
 
   const session = useQuery({ queryKey: ["session", sessionId], queryFn: () => getSession(sessionId) });
   const questions = useQuery({ queryKey: ["questions", sessionId], queryFn: () => listQuestions(sessionId) });
@@ -642,10 +641,15 @@ function SessionPage() {
   /* bumped only by stopAudio, so queued lines survive each other's playback */
   const speechGenRef = useRef(0);
 
+  /* the live voice stream, so stopPlayback can abort it mid-flight */
+  const streamHandleRef = useRef<{ stop: () => void } | null>(null);
+
   /* stops whatever is playing without cancelling anything queued behind it */
   const stopPlayback = () => {
     speechTokenRef.current += 1;
     pendingPlayRef.current = null;
+    streamHandleRef.current?.stop();
+    streamHandleRef.current = null;
     const audio = audioRef.current;
     if (audio) {
       audio.onended = null;
@@ -667,31 +671,10 @@ function SessionPage() {
     stopPlayback();
   };
 
-  /* cache of in-flight/generated audio keyed by spoken text, so anything
-     prefetched (next question, feedback report) plays instantly instead of
-     waiting on a fresh voice-generation round trip after it pops up */
-  const audioCacheRef = useRef(new Map<string, Promise<{ ok: boolean; audio?: string; message?: string }>>());
-
-  const requestAudio = (spoken: string) => {
-    const key = spoken.slice(0, 3500);
-    let pending = audioCacheRef.current.get(key);
-    if (!pending) {
-      pending = speakFn({ data: { text: key } });
-      audioCacheRef.current.set(key, pending);
-      if (audioCacheRef.current.size > 20) {
-        const oldest = audioCacheRef.current.keys().next().value;
-        if (oldest) audioCacheRef.current.delete(oldest);
-      }
-    }
-    return pending;
-  };
-
-  /* warm the cache so playback starts the moment the line is needed */
-  const prefetchAudio = (text: string) => {
-    const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
-    if (!spoken) return;
-    void requestAudio(spoken).catch(() => undefined);
-  };
+  /* Sherlock's voice streams from /api/tts: playback starts on the first
+     audio chunk over the network, so there is no generation wait to hide and
+     nothing to prefetch. Kept as a no-op so existing warm-up calls are safe. */
+  const prefetchAudio = (_text: string) => undefined;
 
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
@@ -699,74 +682,51 @@ function SessionPage() {
     stopPlayback();
     const token = speechTokenRef.current;
     setVoiceLoading(true);
-    try {
-      const result = await requestAudio(spoken);
-      if (token !== speechTokenRef.current) return;
-      if (!result.ok) {
-        audioCacheRef.current.delete(spoken.slice(0, 3500));
-        setVoiceNotice(result.message ?? "Sherlock's voice didn't come through.");
-        return;
-      }
 
-      // Decode base64 into a real audio blob: long data: URIs are rejected or
-      // silently dropped by some browsers, a blob URL always plays.
-      if (!result.audio) {
-        audioCacheRef.current.delete(spoken.slice(0, 3500));
-        setVoiceNotice("Sherlock's voice didn't come through.");
-        return;
-      }
-      const binary = atob(result.audio);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
-      audioUrlRef.current = url;
+    // Reuse one element so the browser keeps the gesture-granted permission.
+    const audio = audioRef.current ?? new Audio();
+    audioRef.current = audio;
+    audio.preload = "auto";
 
-      // Reuse one element so the browser keeps the gesture-granted permission.
-      const audio = audioRef.current ?? new Audio();
-      audioRef.current = audio;
-      audio.src = url;
-      audio.preload = "auto";
-
-      await new Promise<void>((resolve) => {
-        const finish = () => {
+    await new Promise<void>((resolve) => {
+      const handle = streamSpeech(spoken, audio, {
+        onStart: () => {
+          if (token !== speechTokenRef.current) return;
+          setSpeaking(true);
+          setVoiceLoading(false);
+          setVoiceNotice(null);
+        },
+        onEnd: () => {
           setSpeaking(false);
           resolve();
-        };
-        audio.onended = finish;
-        audio.onpause = finish;
-
-        const start = async () => {
+        },
+        onError: (error) => {
           if (token !== speechTokenRef.current) {
             resolve();
             return;
           }
-          setSpeaking(true);
-          await audio.play();
-          setVoiceNotice(null);
-        };
-
-        void start().catch((error: Error) => {
-          // Autoplay policy: speech generated without a click cannot start on
-          // its own. Keep it ready and let the next tap anywhere release it.
+          setSpeaking(false);
+          // Autoplay policy: speech triggered without a click cannot start on
+          // its own. Re-stream the line on the student's next tap anywhere.
           if (error.name === "NotAllowedError") {
-            setSpeaking(false);
-            pendingPlayRef.current = start;
+            pendingPlayRef.current = async () => {
+              await playAudio(text);
+            };
             setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
           } else {
             console.error(error);
-            setSpeaking(false);
             setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
           }
           resolve();
-        });
+        },
       });
-    } catch (error) {
-      console.error(error);
-      setSpeaking(false);
-      setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
-    } finally {
-      setVoiceLoading(false);
-    }
+      streamHandleRef.current = handle;
+      void handle.done.finally(() => {
+        if (streamHandleRef.current === handle) streamHandleRef.current = null;
+        resolve();
+      });
+    });
+    if (token === speechTokenRef.current) setVoiceLoading(false);
   };
 
   /* speak one thing after another instead of cutting the previous line off */
