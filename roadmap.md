@@ -21,3 +21,4 @@
 
 ## Open
 - Accounts / per-user data (intentionally deferred: no login for now)
+- Get exact DNS records for sherlockholes.study to enter in Porkbun
