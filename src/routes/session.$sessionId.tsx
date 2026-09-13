@@ -744,6 +744,19 @@ function SessionPage() {
   /* ---------- Sherlock speaks every question and the feedback report ---------- */
   const spokenOnceRef = useRef<Set<string>>(new Set());
   const feedbackSpokenRef = useRef(false);
+
+  /* switching panels (or leaving the session) silences Sherlock at once: the
+     current line is aborted mid-stream and anything queued behind it dropped */
+  const lastPanelRef = useRef(panel);
+  useEffect(() => {
+    if (lastPanelRef.current === panel) return;
+    lastPanelRef.current = panel;
+    stopAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel]);
+
+  useEffect(() => stopAudio, []);
+
   const speakOnce = (key: string, text: string) => {
     if (!text.trim()) return;
     if (spokenOnceRef.current.has(key)) return;
