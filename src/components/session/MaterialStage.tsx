@@ -1,4 +1,4 @@
-import { FileText, Upload } from "lucide-react";
+import { FileText, Loader2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -25,12 +25,22 @@ export function MaterialStage({
   const [limit, setLimit] = useState(initialLimit || 180);
   const [sources, setSources] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
+  const [progress, setProgress] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
   const readFiles = async (files: File[]) => {
     setReading(true);
+    setProgress(
+      Object.fromEntries(files.map((file) => [file.name, "Opening…"])) as Record<string, string>,
+    );
     try {
-      const results = await Promise.all(files.map((file) => readNotesFile(file)));
+      const results = await Promise.all(
+        files.map((file) =>
+          readNotesFile(file, (message) =>
+            setProgress((current) => ({ ...current, [file.name]: message })),
+          ),
+        ),
+      );
       const added: string[] = [];
       let blob = "";
       for (const result of results) {
@@ -49,6 +59,7 @@ export function MaterialStage({
       );
     } finally {
       setReading(false);
+      setProgress({});
     }
   };
 
@@ -96,6 +107,17 @@ export function MaterialStage({
               several at once. Handwriting is scanned into text for you.
             </span>
           </div>
+          {Object.keys(progress).length > 0 && (
+            <ul className="space-y-1 rounded-lg border border-border bg-card/60 p-3 text-sm">
+              {Object.entries(progress).map(([name, message]) => (
+                <li key={name} className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  <span className="font-medium">{name}</span>
+                  <span className="text-muted-foreground">{message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {sources.length > 0 && (
             <ul className="flex flex-wrap gap-2">
               {sources.map((name, index) => (
