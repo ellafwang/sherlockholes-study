@@ -1330,6 +1330,7 @@ function SessionPage() {
             <FeedbackPanel
               report={report}
               loading={reportBusy}
+              speakingLine={spokenLine}
               onBack={() => {
                 stopAudio();
                 setPanel("none");
