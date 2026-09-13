@@ -181,13 +181,15 @@ export async function readNotesFile(file: File): Promise<ReadResult> {
     }
 
     const text = (await file.text()).trim();
-    if (!text) return { name: file.name, error: "that file looked empty" };
-    // A stray binary file read as text turns into mostly unreadable characters.
     const readable = text.replace(/[^\x09\x0a\x0d\x20-\x7e\u00a0-\uffff]/g, "");
-    if (readable.length < text.length * 0.85) {
-      return { name: file.name, error: "that file type can't be read — try a PDF, Word file or text" };
+    if (text && readable.length >= text.length * 0.85) {
+      return { name: file.name, text: readable };
     }
-    return { name: file.name, text: readable };
+
+    // Not readable as writing — treat it as a picture of notes and scan it.
+    const scanned = await scanPicture(await toDataUrl(file));
+    if (scanned) return { name: file.name, text: scanned };
+    return { name: file.name, error: "no readable writing was found in that file" };
   } catch (cause) {
     console.error(cause);
     return { name: file.name, error: "that file couldn't be opened" };
