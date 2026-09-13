@@ -113,7 +113,6 @@ function SessionPage() {
   const seedQuestionsFn = useServerFn(seedQuestions);
   const buildReportFn = useServerFn(buildReport);
   const learnReplyFn = useServerFn(learnReply);
-  const speakFn = useServerFn(speakAsSherlock);
 
   const session = useQuery({ queryKey: ["session", sessionId], queryFn: () => getSession(sessionId) });
   const questions = useQuery({ queryKey: ["questions", sessionId], queryFn: () => listQuestions(sessionId) });
