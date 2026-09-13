@@ -25,12 +25,22 @@ export function MaterialStage({
   const [limit, setLimit] = useState(initialLimit || 180);
   const [sources, setSources] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
+  const [progress, setProgress] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
   const readFiles = async (files: File[]) => {
     setReading(true);
+    setProgress(
+      Object.fromEntries(files.map((file) => [file.name, "Opening…"])) as Record<string, string>,
+    );
     try {
-      const results = await Promise.all(files.map((file) => readNotesFile(file)));
+      const results = await Promise.all(
+        files.map((file) =>
+          readNotesFile(file, (message) =>
+            setProgress((current) => ({ ...current, [file.name]: message })),
+          ),
+        ),
+      );
       const added: string[] = [];
       let blob = "";
       for (const result of results) {
