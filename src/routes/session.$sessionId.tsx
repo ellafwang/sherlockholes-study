@@ -642,10 +642,15 @@ function SessionPage() {
   /* bumped only by stopAudio, so queued lines survive each other's playback */
   const speechGenRef = useRef(0);
 
+  /* the live voice stream, so stopPlayback can abort it mid-flight */
+  const streamHandleRef = useRef<{ stop: () => void } | null>(null);
+
   /* stops whatever is playing without cancelling anything queued behind it */
   const stopPlayback = () => {
     speechTokenRef.current += 1;
     pendingPlayRef.current = null;
+    streamHandleRef.current?.stop();
+    streamHandleRef.current = null;
     const audio = audioRef.current;
     if (audio) {
       audio.onended = null;
