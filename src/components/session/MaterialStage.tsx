@@ -59,6 +59,7 @@ export function MaterialStage({
       );
     } finally {
       setReading(false);
+      setProgress({});
     }
   };
 
