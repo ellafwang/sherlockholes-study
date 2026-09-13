@@ -111,10 +111,15 @@ async function toDataUrl(file: File): Promise<string> {
   return `data:${type};base64,${btoa(binary)}`;
 }
 
-async function readImage(file: File): Promise<string> {
+/** Hands one picture to the note scanner, which reads handwriting and print alike. */
+async function scanPicture(dataUrl: string): Promise<string> {
   const { readImageNotes } = await import("./documents.functions");
-  const result = await readImageNotes({ data: { dataUrl: await toDataUrl(file) } });
+  const result = await readImageNotes({ data: { dataUrl } });
   return result.text.trim();
+}
+
+async function readImage(file: File): Promise<string> {
+  return scanPicture(await toDataUrl(file));
 }
 
 export type ReadResult = { name: string; text: string } | { name: string; error: string };
