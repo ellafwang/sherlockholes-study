@@ -116,6 +116,8 @@ export async function readImageText(args: {
         ],
       },
     ],
+    reasoning: { effort: "low", summary: "auto" },
+    include: ["reasoning.encrypted_content"],
     store: false,
   });
   return text;
