@@ -10,10 +10,18 @@ function extensionOf(name: string) {
   return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-async function readPdf(file: File): Promise<string> {
+async function loadPdfjs() {
   const pdfjs = await import("pdfjs-dist");
   const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  return pdfjs;
+}
+
+/** Max pages we photograph and hand to the scanner, to keep uploads quick. */
+const MAX_SCAN_PAGES = 20;
+
+async function readPdf(file: File): Promise<string> {
+  const pdfjs = await loadPdfjs();
 
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
@@ -29,6 +37,32 @@ async function readPdf(file: File): Promise<string> {
   }
   return pages.join("\n\n");
 }
+
+/** Turns each page of a PDF into a picture so handwriting can be read. */
+async function scanPdf(file: File): Promise<string> {
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({ data }).promise;
+  const count = Math.min(pdf.numPages, MAX_SCAN_PAGES);
+  const parts: string[] = [];
+
+  for (let index = 1; index <= count; index += 1) {
+    const page = await pdf.getPage(index);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d");
+    if (!context) continue;
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const text = await scanPicture(dataUrl);
+    if (text) parts.push(count > 1 ? `Page ${index}\n${text}` : text);
+  }
+
+  return parts.join("\n\n").trim();
+}
+
 
 async function readDocx(file: File): Promise<string> {
   const mammoth = (await import("mammoth/mammoth.browser.js")) as {
@@ -77,10 +111,15 @@ async function toDataUrl(file: File): Promise<string> {
   return `data:${type};base64,${btoa(binary)}`;
 }
 
-async function readImage(file: File): Promise<string> {
+/** Hands one picture to the note scanner, which reads handwriting and print alike. */
+async function scanPicture(dataUrl: string): Promise<string> {
   const { readImageNotes } = await import("./documents.functions");
-  const result = await readImageNotes({ data: { dataUrl: await toDataUrl(file) } });
+  const result = await readImageNotes({ data: { dataUrl } });
   return result.text.trim();
+}
+
+async function readImage(file: File): Promise<string> {
+  return scanPicture(await toDataUrl(file));
 }
 
 export type ReadResult = { name: string; text: string } | { name: string; error: string };
@@ -92,7 +131,10 @@ export async function readNotesFile(file: File): Promise<ReadResult> {
 
   const ext = extensionOf(file.name);
   try {
-    if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext) || file.type.startsWith("image/")) {
+    const imageExts = [
+      "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "avif", "heic", "heif",
+    ];
+    if (imageExts.includes(ext) || file.type.startsWith("image/")) {
       const text = await readImage(file);
       if (!text) {
         return { name: file.name, error: "no readable writing was found in that picture" };
@@ -115,14 +157,15 @@ export async function readNotesFile(file: File): Promise<ReadResult> {
 
     if (ext === "pdf" || file.type === "application/pdf") {
       const text = await readPdf(file);
-      if (!text) {
-        return {
-          name: file.name,
-          error: "that PDF has no readable text (it may be a scan) — paste the section instead",
-        };
+      if (text) return { name: file.name, text };
+      // No selectable text: it's a scan or handwritten pages, so read the pictures.
+      const scanned = await scanPdf(file);
+      if (!scanned) {
+        return { name: file.name, error: "no readable writing was found in that file" };
       }
-      return { name: file.name, text };
+      return { name: file.name, text: scanned };
     }
+
 
     if (ext === "docx") {
       const text = await readDocx(file);
@@ -138,13 +181,15 @@ export async function readNotesFile(file: File): Promise<ReadResult> {
     }
 
     const text = (await file.text()).trim();
-    if (!text) return { name: file.name, error: "that file looked empty" };
-    // A stray binary file read as text turns into mostly unreadable characters.
     const readable = text.replace(/[^\x09\x0a\x0d\x20-\x7e\u00a0-\uffff]/g, "");
-    if (readable.length < text.length * 0.85) {
-      return { name: file.name, error: "that file type can't be read — try a PDF, Word file or text" };
+    if (text && readable.length >= text.length * 0.85) {
+      return { name: file.name, text: readable };
     }
-    return { name: file.name, text: readable };
+
+    // Not readable as writing — treat it as a picture of notes and scan it.
+    const scanned = await scanPicture(await toDataUrl(file));
+    if (scanned) return { name: file.name, text: scanned };
+    return { name: file.name, error: "no readable writing was found in that file" };
   } catch (cause) {
     console.error(cause);
     return { name: file.name, error: "that file couldn't be opened" };

@@ -13,9 +13,11 @@ export const readImageNotes = createServerFn({ method: "POST" })
     const { readImageText } = await import("./ai.server");
     const text = await readImageText({
       dataUrl: data.dataUrl,
-      instructions: `You transcribe study notes from images.
+      instructions: `You transcribe study notes from images, including messy handwriting, whiteboards, scanned pages and photographed textbook pages.
 Return ONLY the text that is actually present in the image: headings, sentences, formulas, table cells and diagram labels, in reading order.
+Read handwriting as faithfully as you can; write formulas in LaTeX when they are mathematical.
 Do not summarise, explain, correct or add anything that is not written in the image.
+If a word is genuinely illegible, write [illegible] in its place.
 If the image contains no readable text, return an empty response.`,
     });
     return { text: text.trim() };
