@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Presentation, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -137,11 +137,6 @@ function Dashboard() {
         <div className="flex flex-col items-stretch gap-3">
           <Button size="lg" className="h-auto gap-2 px-7 py-5 text-lg" onClick={() => setCreating(true)}>
             <Plus className="h-5 w-5" /> New notebook
-          </Button>
-          <Button variant="secondary" size="lg" className="gap-2" asChild>
-            <Link to="/pitch" search={{ slide: 1, print: false }}>
-              <Presentation className="h-5 w-5" /> Pitch deck
-            </Link>
           </Button>
         </div>
       </header>
