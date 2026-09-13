@@ -73,16 +73,34 @@ export function FeedbackSidebar() {
         <SidebarGroup className="pt-0">
           <SidebarGroupLabel className="label-caps px-2">Session feedback</SidebarGroupLabel>
           <SidebarGroupContent>
+            {!collapsed && !reports.isPending && (
+              <div className="relative px-2 pb-2">
+                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-sidebar-foreground/50" />
+                <Input
+                  type="search"
+                  placeholder="Search summaries…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="h-9 bg-sidebar-background pl-9 text-sm placeholder:text-sidebar-foreground/50"
+                />
+              </div>
+            )}
             {reports.isPending && !collapsed && (
               <p className="px-2 py-3 text-sm text-sidebar-foreground/65">Opening case notes…</p>
             )}
-            {reports.data?.length === 0 && !collapsed && (
+            {!reports.isPending && reports.data?.length === 0 && !collapsed && (
               <p className="px-2 py-3 text-sm leading-snug text-sidebar-foreground/65">
                 Completed session summaries will appear here.
               </p>
             )}
+            {!reports.isPending && normalized && filtered.length === 0 && !collapsed && (
+              <div className="flex flex-col items-center gap-2 px-2 py-6 text-sidebar-foreground/65">
+                <Search className="size-8" />
+                <p className="text-sm font-medium">No Results Found</p>
+              </div>
+            )}
             <SidebarMenu className="gap-1.5">
-              {reports.data?.map((report) => {
+              {filtered.map((report) => {
                 const session = report.sessions;
                 if (!session) return null;
                 const active = pathname === `/session/${session.id}`;
