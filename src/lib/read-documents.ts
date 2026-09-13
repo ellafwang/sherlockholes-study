@@ -159,7 +159,10 @@ async function readImage(file: File): Promise<string> {
 
 export type ReadResult = { name: string; text: string } | { name: string; error: string };
 
-export async function readNotesFile(file: File): Promise<ReadResult> {
+export async function readNotesFile(
+  file: File,
+  onProgress?: Progress,
+): Promise<ReadResult> {
   if (file.size > MAX_BYTES) {
     return { name: file.name, error: "that file is too large — try a shorter section" };
   }
