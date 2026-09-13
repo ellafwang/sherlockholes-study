@@ -1,5 +1,5 @@
 import { FileText, Loader2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { SherlockFace } from "@/components/SherlockFace";
@@ -15,11 +15,13 @@ export function MaterialStage({
   initialLimit,
   busy,
   onStart,
+  onNotesChange,
 }: {
   initialNotes: string;
   initialLimit: number;
   busy: boolean;
   onStart: (payload: { notes: string; concepts: string[]; limit: number }) => void;
+  onNotesChange?: (notes: string) => void;
 }) {
   const [notes, setNotes] = useState(initialNotes);
   const [limit, setLimit] = useState(initialLimit || 180);
@@ -27,6 +29,13 @@ export function MaterialStage({
   const [reading, setReading] = useState(false);
   const [progress, setProgress] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Keep the parent (and the database) in sync so uploaded notes survive
+  // navigating away before the session has started.
+  useEffect(() => {
+    if (notes !== initialNotes) onNotesChange?.(notes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes]);
 
   const readFiles = async (files: File[]) => {
     setReading(true);
