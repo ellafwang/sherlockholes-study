@@ -107,6 +107,17 @@ export function MaterialStage({
               several at once. Handwriting is scanned into text for you.
             </span>
           </div>
+          {Object.keys(progress).length > 0 && (
+            <ul className="space-y-1 rounded-lg border border-border bg-card/60 p-3 text-sm">
+              {Object.entries(progress).map(([name, message]) => (
+                <li key={name} className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  <span className="font-medium">{name}</span>
+                  <span className="text-muted-foreground">{message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {sources.length > 0 && (
             <ul className="flex flex-wrap gap-2">
               {sources.map((name, index) => (
