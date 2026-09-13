@@ -754,7 +754,7 @@ function SessionPage() {
     const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
     sourceBuffer.mode = "sequence";
     const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
+    const chunks: ArrayBuffer[] = [];
     let streamDone = false;
     let playbackStarted = false;
 
@@ -832,7 +832,7 @@ function SessionPage() {
         if (token !== speechTokenRef.current) return false;
         if (done) break;
         if (value) {
-          chunks.push(value);
+          chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer);
           appendNext();
         }
       }
@@ -853,6 +853,16 @@ function SessionPage() {
     const token = speechTokenRef.current;
     setVoiceLoading(true);
     try {
+      if (supportsStreamingSpeech()) {
+        try {
+          const streamed = await playStreamingAudio(spoken, token);
+          if (!streamed || token !== speechTokenRef.current) return;
+          return;
+        } catch (error) {
+          if (token !== speechTokenRef.current) return;
+          console.error("Streaming voice failed; falling back to buffered playback.", error);
+        }
+      }
       const result = await requestAudio(spoken);
       if (token !== speechTokenRef.current) return;
       if (!result.ok) {
