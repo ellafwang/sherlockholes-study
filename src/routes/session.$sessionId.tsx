@@ -757,6 +757,19 @@ function SessionPage() {
 
   useEffect(() => stopAudio, []);
 
+  /* leaving the session by any browser route — tab close, reload, history
+     back/forward — cuts the voice even when the unmount cleanup runs late */
+  useEffect(() => {
+    const silence = () => stopAudio();
+    window.addEventListener("pagehide", silence);
+    window.addEventListener("beforeunload", silence);
+    return () => {
+      window.removeEventListener("pagehide", silence);
+      window.removeEventListener("beforeunload", silence);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const speakOnce = (key: string, text: string) => {
     if (!text.trim()) return;
     if (spokenOnceRef.current.has(key)) return;
@@ -921,7 +934,13 @@ function SessionPage() {
     return (
       <div className="p-10">
         <p className="text-lg">This session no longer exists.</p>
-        <Button className="mt-4" onClick={() => navigate({ to: "/" })}>
+        <Button
+          className="mt-4"
+          onClick={() => {
+            stopAudio();
+            navigate({ to: "/" });
+          }}
+        >
           Back to notebooks
         </Button>
       </div>
@@ -929,6 +948,7 @@ function SessionPage() {
   }
 
   const backToNotebook = () => {
+    stopAudio();
     const notebookId = session.data?.notebook_id;
     if (!notebookId) return;
     navigate({ to: "/notebook/$notebookId", params: { notebookId } });
