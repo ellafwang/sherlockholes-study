@@ -131,7 +131,10 @@ export async function readNotesFile(file: File): Promise<ReadResult> {
 
   const ext = extensionOf(file.name);
   try {
-    if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext) || file.type.startsWith("image/")) {
+    const imageExts = [
+      "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "avif", "heic", "heif",
+    ];
+    if (imageExts.includes(ext) || file.type.startsWith("image/")) {
       const text = await readImage(file);
       if (!text) {
         return { name: file.name, error: "no readable writing was found in that picture" };
