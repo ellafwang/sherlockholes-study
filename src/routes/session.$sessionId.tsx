@@ -1227,10 +1227,17 @@ function SessionPage() {
         </div>
         <MaterialStage
           initialNotes={notes}
-          
           initialLimit={limit}
           busy={starting}
           onStart={startTeaching}
+          onNotesChange={(value) => {
+            if (notesSaveTimer.current) window.clearTimeout(notesSaveTimer.current);
+            notesSaveTimer.current = window.setTimeout(() => {
+              void updateSession(sessionId, { notes_text: value }).then(() =>
+                queryClient.invalidateQueries({ queryKey: ["session", sessionId] }),
+              );
+            }, 800);
+          }}
         />
       </main>
     );
