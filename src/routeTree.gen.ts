@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as PitchRouteImport } from './routes/pitch'
 import { Route as ApiTtsRouteImport } from './routes/api/tts'
 import { Route as NotebookNotebookIdRouteImport } from './routes/notebook.$notebookId'
 import { Route as SessionSessionIdRouteImport } from './routes/session.$sessionId'
@@ -18,11 +17,6 @@ import { Route as SessionSessionIdRouteImport } from './routes/session.$sessionI
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PitchRoute = PitchRouteImport.update({
-  id: '/pitch',
-  path: '/pitch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTtsRoute = ApiTtsRouteImport.update({
@@ -43,14 +37,12 @@ const SessionSessionIdRoute = SessionSessionIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/pitch': typeof PitchRoute
   '/api/tts': typeof ApiTtsRoute
   '/notebook/$notebookId': typeof NotebookNotebookIdRoute
   '/session/$sessionId': typeof SessionSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/pitch': typeof PitchRoute
   '/api/tts': typeof ApiTtsRoute
   '/notebook/$notebookId': typeof NotebookNotebookIdRoute
   '/session/$sessionId': typeof SessionSessionIdRoute
@@ -58,30 +50,18 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/pitch': typeof PitchRoute
   '/api/tts': typeof ApiTtsRoute
   '/notebook/$notebookId': typeof NotebookNotebookIdRoute
   '/session/$sessionId': typeof SessionSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/pitch'
-    | '/api/tts'
-    | '/notebook/$notebookId'
-    | '/session/$sessionId'
+  fullPaths: '/' | '/api/tts' | '/notebook/$notebookId' | '/session/$sessionId'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/pitch'
-    | '/api/tts'
-    | '/notebook/$notebookId'
-    | '/session/$sessionId'
+  to: '/' | '/api/tts' | '/notebook/$notebookId' | '/session/$sessionId'
   id:
     | '__root__'
     | '/'
-    | '/pitch'
     | '/api/tts'
     | '/notebook/$notebookId'
     | '/session/$sessionId'
@@ -89,7 +69,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PitchRoute: typeof PitchRoute
   ApiTtsRoute: typeof ApiTtsRoute
   NotebookNotebookIdRoute: typeof NotebookNotebookIdRoute
   SessionSessionIdRoute: typeof SessionSessionIdRoute
@@ -102,13 +81,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pitch': {
-      id: '/pitch'
-      path: '/pitch'
-      fullPath: '/pitch'
-      preLoaderRoute: typeof PitchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/tts': {
@@ -137,7 +109,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PitchRoute: PitchRoute,
   ApiTtsRoute: ApiTtsRoute,
   NotebookNotebookIdRoute: NotebookNotebookIdRoute,
   SessionSessionIdRoute: SessionSessionIdRoute,
