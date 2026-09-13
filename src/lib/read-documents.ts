@@ -173,6 +173,7 @@ export async function readNotesFile(
       "png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "avif", "heic", "heif",
     ];
     if (imageExts.includes(ext) || file.type.startsWith("image/")) {
+      onProgress?.("Reading the handwriting in your picture…");
       const text = await readImage(file);
       if (!text) {
         return { name: file.name, error: "no readable writing was found in that picture" };
