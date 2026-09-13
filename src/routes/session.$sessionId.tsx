@@ -142,6 +142,7 @@ function SessionPage() {
   const [learnBusy, setLearnBusy] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [spokenLine, setSpokenLine] = useState<string | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [retake, setRetake] = useState(false);
   const lastGradeAt = useRef(0);
@@ -645,6 +646,7 @@ function SessionPage() {
     }
     setSpeaking(false);
     setVoiceLoading(false);
+    setSpokenLine(null);
   };
 
   /* full stop: current line and everything queued after it */
