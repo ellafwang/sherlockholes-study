@@ -36,6 +36,16 @@ export function FeedbackSidebar() {
 
   const closeMobile = () => setOpenMobile(false);
 
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!normalized) return reports.data ?? [];
+    return (reports.data ?? []).filter((report) => {
+      const title = report.sessions?.title ?? "";
+      return title.toLowerCase().includes(normalized);
+    });
+  }, [reports.data, normalized]);
+
   return (
     <Sidebar collapsible="icon" className="border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-3">
