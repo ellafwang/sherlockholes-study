@@ -40,7 +40,7 @@ import {
 } from "@/lib/db";
 import { buildReport, gradeAnswer, gradeBlurt, learnReply, seedQuestions } from "@/lib/sherlock.functions";
 import { latexToSpeech } from "@/lib/math-speech";
-import { speakAsSherlock } from "@/lib/voice.functions";
+import { streamSpeech } from "@/lib/tts-stream";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/session/$sessionId")({
