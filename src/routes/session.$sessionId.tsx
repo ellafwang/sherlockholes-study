@@ -716,6 +716,136 @@ function SessionPage() {
      still active lets the generated audio play later without autoplay blocking. */
   const unlockVoice = unlockSherlockVoice;
 
+  /**
+   * Progressive playback: the first MP3 chunk starts while ElevenLabs is still
+   * generating the rest. Returns false when the token was cancelled.
+   */
+  const playStreamingAudio = async (spoken: string, token: number) => {
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    const response = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: spoken }),
+      signal: controller.signal,
+    });
+    if (token !== speechTokenRef.current) return false;
+    if (!response.ok || !response.body) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(detail || `Streaming voice failed with ${response.status}`);
+    }
+
+    const mediaSource = new MediaSource();
+    const url = URL.createObjectURL(mediaSource);
+    audioUrlRef.current = url;
+    const audio = audioRef.current ?? new Audio();
+    audioRef.current = audio;
+    audio.src = url;
+    audio.preload = "auto";
+
+    await new Promise<void>((resolve, reject) => {
+      mediaSource.addEventListener("sourceopen", () => resolve(), { once: true });
+      mediaSource.addEventListener("sourceclose", () => reject(new Error("The voice stream closed.")), {
+        once: true,
+      });
+    });
+    if (token !== speechTokenRef.current) return false;
+
+    const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+    sourceBuffer.mode = "sequence";
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let streamDone = false;
+    let playbackStarted = false;
+
+    let finishPlayback: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      finishPlayback = () => {
+        if (audioUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          audioUrlRef.current = null;
+        }
+        if (streamAbortRef.current === controller) streamAbortRef.current = null;
+        setSpeaking(false);
+        resolve();
+      };
+    });
+
+    const appendNext = () => {
+      if (token !== speechTokenRef.current) {
+        void reader.cancel().catch(() => undefined);
+        finishPlayback();
+        return;
+      }
+      if (sourceBuffer.updating) return;
+      const chunk = chunks.shift();
+      if (chunk) {
+        try {
+          sourceBuffer.appendBuffer(chunk);
+        } catch (error) {
+          console.error(error);
+          finishPlayback();
+        }
+        return;
+      }
+      if (streamDone && mediaSource.readyState === "open") mediaSource.endOfStream();
+    };
+
+    const startPlayback = async () => {
+      if (token !== speechTokenRef.current) {
+        finishPlayback();
+        return;
+      }
+      setSpeaking(true);
+      setVoiceLoading(false);
+      setVoiceNotice(null);
+      await audio.play();
+    };
+
+    sourceBuffer.addEventListener("updateend", () => {
+      if (!playbackStarted) {
+        playbackStarted = true;
+        void startPlayback().catch((error: Error) => {
+          if (error.name === "NotAllowedError") {
+            setSpeaking(false);
+            pendingPlayRef.current = startPlayback;
+            setVoiceNotice("Tap anywhere to let Sherlock speak out loud.");
+          } else {
+            console.error(error);
+            setSpeaking(false);
+            setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+          }
+        });
+      }
+      appendNext();
+    });
+
+    audio.onended = finishPlayback;
+    audio.onerror = () => {
+      setVoiceNotice("Sherlock's voice didn't come through — tap “Hear it” to try again.");
+      finishPlayback();
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (token !== speechTokenRef.current) return false;
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          appendNext();
+        }
+      }
+      streamDone = true;
+      appendNext();
+      await finished;
+      return true;
+    } catch (error) {
+      if (token !== speechTokenRef.current || controller.signal.aborted) return false;
+      throw error;
+    }
+  };
+
   const playAudio = async (text: string) => {
     const spoken = latexToSpeech(text).replace(/[*_#`>]/g, " ").trim();
     if (!spoken) return;
