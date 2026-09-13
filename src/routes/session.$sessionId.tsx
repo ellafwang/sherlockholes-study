@@ -748,7 +748,9 @@ function SessionPage() {
       if (context) {
         if (context.state === "suspended") await context.resume();
         if (token !== speechTokenRef.current) return;
-        const decoded = await context.decodeAudioData(Uint8Array.from(bytes).buffer);
+        const encodedAudio = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(encodedAudio).set(bytes);
+        const decoded = await context.decodeAudioData(encodedAudio);
         if (token !== speechTokenRef.current) return;
         const source = context.createBufferSource();
         source.buffer = decoded;
@@ -1027,7 +1029,14 @@ function SessionPage() {
     if (speech.supported) speech.start();
   };
 
-  useEffect(() => () => audioRef.current?.pause(), []);
+  useEffect(
+    () => () => {
+      audioRef.current?.pause();
+      audioSourceRef.current?.stop();
+      void audioContextRef.current?.close();
+    },
+    [],
+  );
 
   if (session.isPending) {
     return <p className="p-10 text-muted-foreground">Opening the case…</p>;
