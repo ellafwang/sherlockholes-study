@@ -39,13 +39,14 @@ async function readPdf(file: File): Promise<string> {
 }
 
 /** Turns each page of a PDF into a picture so handwriting can be read. */
-async function scanPdf(file: File): Promise<string> {
+async function scanPdf(file: File, onProgress?: Progress): Promise<string> {
   const pdfjs = await loadPdfjs();
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
   const count = Math.min(pdf.numPages, MAX_SCAN_PAGES);
-  const parts: string[] = [];
 
+  // Photograph the pages first (fast, main thread), then read them together.
+  const shots: string[] = [];
   for (let index = 1; index <= count; index += 1) {
     const page = await pdf.getPage(index);
     const viewport = page.getViewport({ scale: 2 });
@@ -55,12 +56,46 @@ async function scanPdf(file: File): Promise<string> {
     const context = canvas.getContext("2d");
     if (!context) continue;
     await page.render({ canvas, canvasContext: context, viewport }).promise;
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    const text = await scanPicture(dataUrl);
-    if (text) parts.push(count > 1 ? `Page ${index}\n${text}` : text);
+    shots.push(canvas.toDataURL("image/jpeg", 0.85));
+    onProgress?.(`Photographing page ${index} of ${count}…`);
   }
 
-  return parts.join("\n\n").trim();
+  let done = 0;
+  onProgress?.(`Reading ${shots.length} page${shots.length === 1 ? "" : "s"} of handwriting…`);
+  const texts = await mapWithLimit(shots, 4, async (dataUrl) => {
+    const text = await scanPicture(dataUrl);
+    done += 1;
+    onProgress?.(`Read ${done} of ${shots.length} pages…`);
+    return text;
+  });
+
+  return texts
+    .map((text, index) => (text ? (shots.length > 1 ? `Page ${index + 1}\n${text}` : text) : ""))
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
+
+type Progress = (message: string) => void;
+
+/** Runs the work a few items at a time so many pages don't queue up one by one. */
+async function mapWithLimit<T, R>(
+  items: T[],
+  limit: number,
+  work: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      results[index] = await work(items[index]!, index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
 }
 
 
